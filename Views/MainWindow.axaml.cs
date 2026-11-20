@@ -1,7 +1,8 @@
+using System.IO;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media.TextFormatting.Unicode;
-using System.Diagnostics;
+using Avalonia.Platform.Storage;
+
 namespace Tatami.Views;
 
 public partial class MainWindow : Window
@@ -11,17 +12,25 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
-    private void Button_OnClick(object? sender, RoutedEventArgs e)
+    private async void Button_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (double.TryParse(Celsius.Text, out double c))
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            var f = c * (9d / 5d) + 32;
-            Fahrenheit.Text = f.ToString("0.0");
-        }
-        else
+            Title = "Select a File",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+            new FilePickerFileType("Text Files") { Patterns = ["*.txt"] },
+            new FilePickerFileType("All Files") { Patterns = ["*"] },
+            ]
+        });
+
+        if (files.Count > 0)
         {
-            Celsius.Text = "0";
-            Fahrenheit.Text = "0";
+            var file = files[0];
+            await using var stream = await file.OpenReadAsync();
+            StreamReader sr = new(stream);
+            content.Text = sr.ReadToEnd();
         }
     }
 }
