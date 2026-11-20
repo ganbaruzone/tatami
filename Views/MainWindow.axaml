@@ -3,7 +3,7 @@
         xmlns:vm="using:Tatami.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="450"
         x:Class="Tatami.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
@@ -34,10 +34,10 @@
               ColumnDefinitions="120, 100"
               RowDefinitions="Auto, Auto">
             <TextBlock Grid.Row="0" Grid.Column="0" Margin="10">Celsius</TextBlock>
-            <TextBox Grid.Row="0" Grid.Column="1" Margin="0 5" Text="0"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Margin="0 5" Text="0" Name="Celsius" />
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="10">Fahrenheit</TextBlock>
-            <TextBox Grid.Row="1" Grid.Column="1" Margin="0 5" Text="0"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Margin="0 5" Text="0" Name="Fahrenheit" />
         </Grid>
-        <Button HorizontalAlignment="Center">Calculate</Button>
+        <Button HorizontalAlignment="Center" Click="Button_OnClick">Calculate</Button>
     </StackPanel>
 </Window>
