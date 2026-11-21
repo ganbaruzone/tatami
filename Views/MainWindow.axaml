@@ -16,7 +16,9 @@
         <vm:MainViewModel />
     </Design.DataContext>
     <StackPanel Background="Lavender">
-        <Button HorizontalAlignment="Center" Click="Button_OnClick">ファイルを選択</Button>
+        <Button HorizontalAlignment="Center" Click="Read_File">ファイルを選択</Button>
     <TextBox IsReadOnly="True" Name="content"></TextBox>
+        <Button HorizontalAlignment="Center" Click="GetFiles">フォルダを選択</Button>
+    <TextBox IsReadOnly="True" Name="Folder_Contents"></TextBox>
     </StackPanel>
 </Window>
