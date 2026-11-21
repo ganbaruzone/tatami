@@ -3,6 +3,7 @@
         xmlns:vm="using:Tatami.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:io="using:System.IO"
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="450"
         x:Class="Tatami.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -16,9 +17,19 @@
         <vm:MainViewModel />
     </Design.DataContext>
     <StackPanel Background="Lavender">
-        <Button HorizontalAlignment="Center" Click="Read_File">ファイルを選択</Button>
-    <TextBox IsReadOnly="True" Name="content"></TextBox>
         <Button HorizontalAlignment="Center" Click="GetFiles">フォルダを選択</Button>
-    <TextBox IsReadOnly="True" Name="Folder_Contents"></TextBox>
+        <ListBox Name="Folder_Contents"
+                 SelectionMode="Single"
+                 SelectionChanged="File_Selected">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="io:FileInfo">
+                    <TextBlock Text="{Binding Name}"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBox Name="content"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap" />
     </StackPanel>
 </Window>
