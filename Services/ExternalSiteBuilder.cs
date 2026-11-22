@@ -56,8 +56,12 @@ public sealed class ExternalSiteBuilder
             log?.Report($"公開ノート {slugs.Count} 件を準備しました（非公開 {privateCount} 件を除外）。");
             var start = new ProcessStartInfo
             {
-                FileName = options.Executable, WorkingDirectory = project, UseShellExecute = false,
-                RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
+                FileName = options.Executable,
+                WorkingDirectory = project,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
             };
             foreach (var argument in options.Arguments)
                 start.ArgumentList.Add(argument.Replace("{content}", content, StringComparison.Ordinal).Replace("{output}", generatedOutput, StringComparison.Ordinal));

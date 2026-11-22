@@ -48,8 +48,10 @@ public sealed class BuildSettingsWindow : Window
                 Builder = mode.SelectedIndex == 1 ? "external" : "builtin",
                 External = new ExternalBuildOptions
                 {
-                    ProjectPath = project.Text ?? "", Executable = executable.Text ?? "",
-                    Arguments = (arguments.Text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries), TimeoutSeconds = seconds
+                    ProjectPath = project.Text ?? "",
+                    Executable = executable.Text ?? "",
+                    Arguments = (arguments.Text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
+                    TimeoutSeconds = seconds
                 }
             });
         };
@@ -59,7 +61,8 @@ public sealed class BuildSettingsWindow : Window
         {
             Content = new StackPanel
             {
-                Margin = new Thickness(24), Spacing = 10,
+                Margin = new Thickness(24),
+                Spacing = 10,
                 Children =
                 {
                     new TextBlock { Text = "使用するビルダー", FontSize = 20 }, mode, preset,

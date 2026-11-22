@@ -184,8 +184,11 @@ public partial class MainWindow : Window
         if (_buffer?.IsDirty != true && !_metadataPending) return true;
         var dialog = new Window
         {
-            Title = "未保存の変更", Width = 480, SizeToContent = SizeToContent.Height,
-            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Title = "未保存の変更",
+            Width = 480,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
             RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark
         };
         var save = new Button { Content = "保存して続行" };
@@ -196,7 +199,8 @@ public partial class MainWindow : Window
         cancel.Click += (_, _) => dialog.Close("cancel");
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(24), Spacing = 20,
+            Margin = new Thickness(24),
+            Spacing = 20,
             Children =
             {
                 new TextBlock { Text = $"{(_buffer is null ? "ノート" : Path.GetFileName(_buffer.Path))} の変更を保存しますか？", TextWrapping = TextWrapping.Wrap },

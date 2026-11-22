@@ -12,7 +12,10 @@ internal static class NoteDialogs
 {
     private static Window Create(string title) => new()
     {
-        Title = title, Width = 520, SizeToContent = SizeToContent.Height, CanResize = false,
+        Title = title,
+        Width = 520,
+        SizeToContent = SizeToContent.Height,
+        CanResize = false,
         WindowStartupLocation = WindowStartupLocation.CenterOwner,
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark,
         Background = new SolidColorBrush(Color.Parse("#202229"))
@@ -33,7 +36,8 @@ internal static class NoteDialogs
         cancel.Click += (_, _) => window.Close();
         window.Content = new StackPanel
         {
-            Margin = new Thickness(24), Spacing = 12,
+            Margin = new Thickness(24),
+            Spacing = 12,
             Children =
             {
                 new TextBlock { Text = title, FontSize = 18 },
@@ -55,7 +59,8 @@ internal static class NoteDialogs
         cancel.Click += (_, _) => window.Close(false);
         window.Content = new StackPanel
         {
-            Margin = new Thickness(24), Spacing = 16,
+            Margin = new Thickness(24),
+            Spacing = 16,
             Children =
             {
                 new TextBlock { Text = $"{name} をTatamiのゴミ箱へ移動しますか？", TextWrapping = TextWrapping.Wrap },
@@ -76,7 +81,8 @@ internal static class NoteDialogs
         cancel.Click += (_, _) => window.Close();
         window.Content = new StackPanel
         {
-            Margin = new Thickness(24), Spacing = 16,
+            Margin = new Thickness(24),
+            Spacing = 16,
             Children =
             {
                 new TextBlock { Text = entries.Count == 0 ? "ゴミ箱は空です。" : "復元するノートを選んでください。同名ファイルは上書きしません。", TextWrapping = TextWrapping.Wrap },
