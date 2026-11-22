@@ -29,6 +29,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
 - [x] `tatami notes validate`: 出力先を変更せずFront Matter・公開slug重複・公開本文の非公開ブロックを検査する。
+- [x] `tatami notes search <query>`: ファイル名・タイトル・タグ・本文を検索し、該当行を表示する。
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
 - [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [x] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
@@ -67,6 +68,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `notes validate` 実装記録（2026-11-22）
 
 ノート全件のFront Matterを読み込み、公開slugの形式と重複、公開本文の `:::private` 閉じ忘れを検査します。サイト出力先には書き込みません。不備があれば診断を標準エラーへ表示して終了コード1を返します。
+
+### CLI `notes search` 実装記録（2026-11-22）
+
+ファイル名・タイトル・タグ・本文を大文字小文字を区別せず部分一致検索します。本文一致は入力ルートからの相対パス、行番号、該当行を標準出力へ表示します。
 - CLIサブコマンドごとの実装記録は後続の各節を参照。
 
 ### CLI `notes create` 実装記録（2026-11-22）

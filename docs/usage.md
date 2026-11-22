@@ -227,6 +227,7 @@ CLIはGUIを開かず、ノート確認・変更とサイトビルドを実行�
 dotnet run --project Tatami.Cli -- --help
 dotnet run --project Tatami.Cli -- notes list --input ./notes
 dotnet run --project Tatami.Cli -- notes validate --input ./notes
+dotnet run --project Tatami.Cli -- notes search "静的サイト" --input ./notes
 dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output --json
 dotnet run --project Tatami.Cli -- preview --output ./site-output
 ```
@@ -247,6 +248,7 @@ dotnet publish Tatami.Cli/Tatami.Cli.csproj -c Release -o ./artifacts/tatami
 | `tatami preview` | 生成済みHTMLを127.0.0.1で配信し、Ctrl+Cで終了。`--output` または設定済み出力先を使用 |
 | `tatami notes list` / `show <path>` | ノート一覧・Front Matterと公開判定 |
 | `tatami notes validate` | 出力を変更せずFront Matter、公開slug重複、公開本文の非公開ブロックを検査 |
+| `tatami notes search <query>` | ファイル名・タイトル・タグ・本文を検索し、本文は相対パスと行番号を表示 |
 | `tatami notes create <name>` | 非公開ノート作成。`--directory` で作成先を指定 |
 | `tatami notes rename <path> <name>` | ノート名変更 |
 | `tatami notes trash <path>` / `trash list` / `restore <id>` | アプリ内ゴミ箱への移動・一覧・復元 |

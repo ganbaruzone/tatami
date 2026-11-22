@@ -252,6 +252,46 @@ internal static class TatamiCli
                 else Console.Write(note.FrontMatter);
                 return 0;
             }
+            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "search")
+            {
+                var root = await ResolveInputAsync(input);
+                var query = positional[2];
+                if (string.IsNullOrWhiteSpace(query)) return UsageError("検索語を指定してください。");
+                var notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output"));
+                var matches = 0;
+                foreach (var note in notes)
+                {
+                    var relative = Path.GetRelativePath(root, note.SourcePath);
+                    var metadataLine = note.FrontMatter is null ? 1 : 2;
+                    if (Path.GetFileNameWithoutExtension(note.SourcePath).Contains(query, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"{relative}: ファイル名一致");
+                        matches++;
+                    }
+                    if (note.Metadata.Title?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        Console.WriteLine($"{relative}:{metadataLine}: title: {note.Metadata.Title}");
+                        matches++;
+                    }
+                    foreach (var tag in note.Metadata.Tags ?? [])
+                    {
+                        if (!tag.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                        Console.WriteLine($"{relative}:{metadataLine}: tag: {tag}");
+                        matches++;
+                    }
+                    var bodyLineOffset = note.FrontMatter?.Count(character => character == '\n') + (note.FrontMatter is null ? 0 : 2) ?? 0;
+                    var lines = note.Markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+                    for (var line = 0; line < lines.Length; line++)
+                    {
+                        if (!lines[line].Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                        Console.WriteLine($"{relative}:{bodyLineOffset + line + 1}: {lines[line].Trim()}");
+                        matches++;
+                    }
+                }
+                if (matches == 0) Console.WriteLine("一致するノートはありません。");
+                else if (!_quiet) Console.Error.WriteLine($"{matches} 件の一致");
+                return 0;
+            }
             return UsageError("未対応のコマンドです。`tatami --help` を参照してください。");
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException or InvalidDataException or ArgumentException)
@@ -461,6 +501,7 @@ internal static class TatamiCli
 tatami {Version}
 使い方:
   tatami [--quiet|--verbose] notes list [--input <dir>]
+  tatami [--quiet|--verbose] notes search <query> [--input <dir>]
   tatami [--quiet|--verbose] notes validate [--input <dir>]
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
   tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
@@ -477,6 +518,7 @@ tatami {Version}
   tatami --version
 
 notes list   Markdownノートを再帰的に一覧表示します（公開状態つき）。
+notes search 本文・タイトル・タグから語句を検索し、相対パスと行番号を表示します。
 notes validate Front Matter、公開slugの重複、非公開ブロックを検査します（出力先は変更しません）。
 notes show   Front Matterと公開判定を表示します。
 notes create 非公開の新規ノートを作成します。
