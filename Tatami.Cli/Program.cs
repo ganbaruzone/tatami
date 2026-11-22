@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Diagnostics;
 using System.Text.Json;
 using Tatami.Models;
 using Tatami.Services;
@@ -120,6 +121,8 @@ internal static class TatamiCli
                 Console.WriteLine(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
                 return 0;
             }
+            if (positional.Count == 1 && positional[0] == "doctor")
+                return await RunDoctorAsync(configPath);
             if (positional.Count == 4 && positional[0] == "config" && positional[1] == "set")
             {
                 var config = await ResolveConfigAsync(configPath);
@@ -198,6 +201,84 @@ internal static class TatamiCli
         return await new WorkspaceSettings().LoadAsync() ?? new SiteConfig("", "");
     }
 
+    private static async Task<int> RunDoctorAsync(string? configPath)
+    {
+        var problems = 0;
+        void Check(string label, bool ok, string detail)
+        {
+            Console.WriteLine($"{(ok ? "OK" : "NG")}\t{label}\t{detail}");
+            if (!ok) problems++;
+        }
+
+        var sdk = await RunVersionAsync("dotnet", "--version");
+        Check(".NET SDK", sdk is not null, sdk ?? "dotnet --version を実行できません");
+
+        SiteConfig? config = null;
+        try { config = await ResolveConfigAsync(configPath); Check("設定", true, configPath is null ? "ユーザー設定を読み込みました" : Path.GetFullPath(configPath)); }
+        catch (Exception ex) { Check("設定", false, ex.Message); }
+
+        if (config is not null)
+        {
+            var input = ResolveConfiguredPath(config.InputPath);
+            var output = ResolveConfiguredPath(config.OutputPath);
+            Check("入力パス", input is not null && Directory.Exists(input), input ?? "未設定");
+            Check("出力パス", output is not null && IsOutputPathSafe(input, output), output ?? "未設定または入力と競合");
+            if (config.Builder == "external")
+            {
+                var executable = config.External.Executable;
+                var executableFound = await RunVersionAsync(executable, "--version") is not null;
+                Check("外部ビルダー実行ファイル", executableFound, executable);
+                Check("外部ビルダープロジェクト", Directory.Exists(config.External.ProjectPath), config.External.ProjectPath);
+            }
+            else Check("ビルダー", config.Builder == "builtin", config.Builder);
+        }
+
+        return problems == 0 ? 0 : 1;
+    }
+
+    private static string? ResolveConfiguredPath(string path) =>
+        string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+
+    private static bool IsOutputPathSafe(string? input, string output)
+    {
+        if (input is null) return false;
+        return Directory.Exists(input)
+            && !IsWithin(input, output)
+            && !IsWithin(output, input);
+    }
+
+    private static bool IsWithin(string path, string root)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        return fullPath.Equals(fullRoot, comparison) || fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison);
+    }
+
+    private static async Task<string?> RunVersionAsync(string executable, string argument)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = executable,
+                ArgumentList = { argument },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+            if (process is null) return null;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await process.WaitForExitAsync(timeout.Token);
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            if (process.ExitCode != 0) return null;
+            return string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
+        }
+        catch { return null; }
+    }
+
     private static async Task<string> ResolveInputAsync(string? input)
     {
         if (!string.IsNullOrWhiteSpace(input))
@@ -245,6 +326,7 @@ tatami {Version}
   tatami [--quiet|--verbose] notes restore <id> [--input <dir>]
   tatami config show [--config <file>]
   tatami config set <key> <value> [--config <file>]
+  tatami doctor [--config <file>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
@@ -257,6 +339,7 @@ notes trash  ノートをアプリ内ゴミ箱へ移動します。完全削除�
 notes restore ゴミ箱のノートを元の場所へ復元します。
 config show   現在のビルド設定を表示します。
 config set    input / output / builder / external.* を設定します。
+doctor        .NET・設定・パス・外部ビルダーを診断します。
 build        設定済みビルダーでサイトを生成します。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。
