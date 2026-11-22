@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Channels;
 using Tatami.Models;
 using Tatami.Services;
 
@@ -35,10 +36,12 @@ internal static class TatamiCli
         string? configPath = null;
         string? directory = null;
         var json = false;
+        var watch = false;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] is "--quiet" or "--verbose") continue;
             if (args[i] == "--json") { json = true; continue; }
+            if (args[i] == "--watch") { watch = true; continue; }
             if (args[i] is "--input" or "--output" or "--config" or "--directory")
             {
                 var option = args[i];
@@ -54,10 +57,14 @@ internal static class TatamiCli
             positional.Add(args[i]);
         }
 
+        if (watch && !(positional.Count == 1 && positional[0] == "build"))
+            return UsageError("--watch は build コマンドでのみ使用できます。");
+
         try
         {
             if (positional.Count == 1 && positional[0] == "build")
             {
+                if (watch && json) return UsageError("--watch と --json は同時に指定できません。");
                 var config = await ResolveConfigAsync(configPath);
                 var effective = config with
                 {
@@ -66,6 +73,7 @@ internal static class TatamiCli
                 };
                 if (string.IsNullOrWhiteSpace(effective.InputPath) || string.IsNullOrWhiteSpace(effective.OutputPath))
                     return BuildUsageError(json, effective.OutputPath, "入力・出力ディレクトリが必要です。--input と --output を指定するか、設定してください。");
+                if (watch) return await RunWatchBuildAsync(effective);
                 var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
                 var result = await new BuildCoordinator().BuildAsync(effective, progress);
                 if (json)
@@ -346,6 +354,72 @@ internal static class TatamiCli
         return UsageError(message);
     }
 
+    private static async Task<int> RunWatchBuildAsync(SiteConfig config)
+    {
+        var inputRoot = Path.GetFullPath(config.InputPath);
+        if (!Directory.Exists(inputRoot)) throw new DirectoryNotFoundException($"入力ディレクトリがありません: {inputRoot}");
+        var changes = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
+        { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true, SingleWriter = false });
+        using var watcher = new FileSystemWatcher(inputRoot, "*")
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+            EnableRaisingEvents = false
+        };
+        void Changed(object? _, FileSystemEventArgs change)
+        {
+            var relative = Path.GetRelativePath(inputRoot, change.FullPath);
+            if (!Path.GetExtension(change.FullPath).Equals(".md", StringComparison.OrdinalIgnoreCase)
+                || relative.Split(Path.DirectorySeparatorChar).Any(part => part.Equals(".tatami-trash", StringComparison.OrdinalIgnoreCase)
+                    || part.Equals(".git", StringComparison.OrdinalIgnoreCase))) return;
+            changes.Writer.TryWrite(true);
+        }
+        watcher.Changed += Changed;
+        watcher.Created += Changed;
+        watcher.Deleted += Changed;
+        watcher.Renamed += (_, change) => { Changed(null, change); if (!string.IsNullOrEmpty(change.OldFullPath)) Changed(null, new FileSystemEventArgs(WatcherChangeTypes.Deleted, Path.GetDirectoryName(change.OldFullPath)!, Path.GetFileName(change.OldFullPath))); };
+        watcher.Error += (_, _) => changes.Writer.TryWrite(true);
+        watcher.EnableRaisingEvents = true;
+        using var stop = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancel = (_, eventArgs) => { eventArgs.Cancel = true; stop.Cancel(); };
+        Console.CancelKeyPress += cancel;
+        var lastBuildFailed = false;
+        try
+        {
+            if (!_quiet) Console.Error.WriteLine("Markdownノートを監視しています。終了するには Ctrl+C を押してください。");
+            await RunWatchBuildOnceAsync(config, stop.Token);
+            while (await changes.Reader.WaitToReadAsync(stop.Token))
+            {
+                while (changes.Reader.TryRead(out _)) { }
+                await Task.Delay(TimeSpan.FromMilliseconds(600), stop.Token);
+                while (changes.Reader.TryRead(out _)) { }
+                if (!_quiet) Console.Error.WriteLine("ノートの変更を検出しました。再ビルドします。");
+                try
+                {
+                    await RunWatchBuildOnceAsync(config, stop.Token);
+                    lastBuildFailed = false;
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"再ビルドに失敗しました: {ex.Message}");
+                    lastBuildFailed = true;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+        finally { Console.CancelKeyPress -= cancel; }
+        if (!_quiet) Console.Error.WriteLine("監視を終了しました。");
+        return lastBuildFailed ? 1 : 0;
+    }
+
+    private static async Task RunWatchBuildOnceAsync(SiteConfig config, CancellationToken cancellationToken)
+    {
+        var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
+        var result = await new BuildCoordinator().BuildAsync(config, progress, cancellationToken);
+        if (!_quiet) Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
+    }
+
     private static async Task<SiteConfig> ResolveConfigAsync(string? configPath)
     {
         if (configPath is not null)
@@ -544,6 +618,7 @@ tatami {Version}
   tatami config set <key> <value> [--config <file>]
   tatami doctor [--config <file>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
+  tatami [--quiet|--verbose] build --watch [--input <dir>] [--output <dir>] [--config <file>]
   tatami [--quiet|--verbose] preview [--output <dir>] [--config <file>]
   tatami --help
   tatami --version
@@ -566,6 +641,7 @@ preview      生成済みHTMLを127.0.0.1で配信します（Ctrl+Cで終了）
 --output     HTML出力先（省略時は設定を使用）。
 --config     設定JSONのパス（省略時はアプリ設定を使用）。
 --json       build結果をJSONで標準出力へ出します。
+--watch      Markdown変更後に再ビルドします（Ctrl+Cで終了）。
 --quiet      補助メッセージを抑制します。
 --verbose    補足情報を標準エラーへ表示します。
 

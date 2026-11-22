@@ -27,6 +27,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 
 - [x] `tatami --help` / `tatami --version`: 使用方法・実装済みサブコマンド・バージョンを表示する。
 - [x] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
+- [x] `tatami build --watch`: 初回ビルド後、入力Markdownの変更をまとめて検知して再ビルドする。Ctrl+Cで終了する。
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
 - [x] `tatami notes validate`: 出力先を変更せずFront Matter・公開slug重複・公開本文の非公開ブロックを検査する。
 - [x] `tatami notes search <query>`: ファイル名・タイトル・タグ・本文を検索し、該当行を表示する。
@@ -77,6 +78,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `notes metadata set` 実装記録（2026-11-22）
 
 `title`、`publish`、`slug` を更新します。`NoteMetadataEditor` でFront Matterの他項目を保持し、`EditorBuffer` の外部変更検知つき原子的保存を利用します。
+
+### CLI `build --watch` 実装記録（2026-11-22）
+
+初回ビルドの後、入力ワークスペース内のMarkdownファイルを再帰監視します。連続したファイルイベントは600ミリ秒でまとめて再ビルドし、失敗時は診断を表示して監視を継続します。Ctrl+Cで停止します。JSON出力との併用は拒否します。
 - CLIサブコマンドごとの実装記録は後続の各節を参照。
 
 ### CLI `notes create` 実装記録（2026-11-22）
