@@ -30,6 +30,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
 - [x] `tatami notes validate`: 出力先を変更せずFront Matter・公開slug重複・公開本文の非公開ブロックを検査する。
 - [x] `tatami notes search <query>`: ファイル名・タイトル・タグ・本文を検索し、該当行を表示する。
+- [x] `tatami notes metadata set`: 公開状態・タイトル・slugを変更し、他のFront Matter項目を保持する。
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
 - [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [x] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
@@ -51,7 +52,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 
 - [x] `tatami preview`: ビルド結果をローカルHTTPでプレビューする。サーバーを常駐させ、Ctrl+Cで正常終了する。
 - [ ] `tatami doctor --fix`: 診断結果に応じた依存導入や設定変更を対話的に補助する。
-- [ ] YAML Front Matterの編集、タグ検索、ゴミ箱の完全削除、デプロイ操作はCLI初期範囲に含めず、要望が固まってから個別に検討する。
+- [ ] 任意のYAML Front Matter項目編集、タグ専用検索、ゴミ箱の完全削除、デプロイ操作はCLI初期範囲に含めず、要望が固まってから個別に検討する。
 
 ### CLI初回実装記録（2026-11-22）
 
@@ -72,6 +73,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `notes search` 実装記録（2026-11-22）
 
 ファイル名・タイトル・タグ・本文を大文字小文字を区別せず部分一致検索します。本文一致は入力ルートからの相対パス、行番号、該当行を標準出力へ表示します。
+
+### CLI `notes metadata set` 実装記録（2026-11-22）
+
+`title`、`publish`、`slug` を更新します。`NoteMetadataEditor` でFront Matterの他項目を保持し、`EditorBuffer` の外部変更検知つき原子的保存を利用します。
 - CLIサブコマンドごとの実装記録は後続の各節を参照。
 
 ### CLI `notes create` 実装記録（2026-11-22）

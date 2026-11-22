@@ -123,6 +123,36 @@ internal static class TatamiCli
                 Console.WriteLine(Path.GetRelativePath(root, renamed));
                 return 0;
             }
+            if (positional.Count == 6 && positional[0] == "notes" && positional[1] == "metadata" && positional[2] == "set")
+            {
+                var root = await ResolveInputAsync(input);
+                var path = ResolveNotePath(root, positional[3]);
+                if (!File.Exists(path) || !Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
+                    return UsageError($"Markdownノートが見つかりません: {path}");
+                var current = await EditorBuffer.OpenAsync(path);
+                var note = new NoteRepository().Parse(path, current.Text);
+                var key = positional[4];
+                var value = positional[5];
+                string updated;
+                switch (key)
+                {
+                    case "title":
+                        updated = NoteMetadataEditor.Apply(current.Text, value, note.Metadata.Publish, note.Metadata.Slug);
+                        break;
+                    case "publish" when bool.TryParse(value, out var publish):
+                        updated = NoteMetadataEditor.Apply(current.Text, note.Metadata.Title, publish, note.Metadata.Slug);
+                        break;
+                    case "slug":
+                        updated = NoteMetadataEditor.Apply(current.Text, note.Metadata.Title, note.Metadata.Publish, value);
+                        break;
+                    default:
+                        return UsageError("metadata key は title / publish / slug、publish value は true / false を指定してください。");
+                }
+                current.Text = updated;
+                await current.SaveAsync();
+                Console.WriteLine(Path.GetRelativePath(root, path));
+                return 0;
+            }
             if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "trash" && positional[2] == "list")
             {
                 var root = await ResolveInputAsync(input);
@@ -506,6 +536,7 @@ tatami {Version}
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
   tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
   tatami [--quiet|--verbose] notes rename <path> <name> [--input <dir>]
+  tatami [--quiet|--verbose] notes metadata set <path> <title|publish|slug> <value> [--input <dir>]
   tatami [--quiet|--verbose] notes trash <path> [--input <dir>]
   tatami [--quiet|--verbose] notes trash list [--input <dir>]
   tatami [--quiet|--verbose] notes restore <id> [--input <dir>]
@@ -523,6 +554,7 @@ notes validate Front Matter、公開slugの重複、非公開ブロックを検�
 notes show   Front Matterと公開判定を表示します。
 notes create 非公開の新規ノートを作成します。
 notes rename ファイル名を変更します（既存ファイルは上書きしません）。
+notes metadata set 公開状態・タイトル・slugを変更します。
 notes trash  ノートをアプリ内ゴミ箱へ移動します。完全削除はしません。
 notes restore ゴミ箱のノートを元の場所へ復元します。
 config show   現在のビルド設定を表示します。

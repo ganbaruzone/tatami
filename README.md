@@ -32,6 +32,7 @@ dotnet run --project Tatami.Cli -- notes search "静的サイト" --input ./note
 dotnet run --project Tatami.Cli -- notes show welcome.md --input ./notes
 dotnet run --project Tatami.Cli -- notes create welcome --input ./notes
 dotnet run --project Tatami.Cli -- notes rename welcome.md greeting --input ./notes
+dotnet run --project Tatami.Cli -- notes metadata set greeting.md publish true --input ./notes
 dotnet run --project Tatami.Cli -- notes trash greeting.md --input ./notes
 dotnet run --project Tatami.Cli -- notes trash list --input ./notes
 dotnet run --project Tatami.Cli -- notes restore 00000000-0000-0000-0000-000000000000 --input ./notes
@@ -49,6 +50,7 @@ tatami preview [--output <dir>] [--config <file>]
 
 `notes validate` は出力先を書き換えずにノートのFront Matter、公開slug重複、公開本文の非公開ブロックを検査します。
 `notes search <query>` はファイル名・タイトル・タグ・本文を大文字小文字を区別せず検索し、一致した本文行には行番号を付けて表示します。
+`notes metadata set <path> <key> <value>` は `title`、`publish`、`slug` を変更し、他のFront Matter項目を保持して保存します。
 
 通常のコマンド結果は標準出力、診断は標準エラーへ出ます。`--quiet` は補助メッセージを抑制し、`--verbose` は一覧のタイトルなどを追加表示します。入力や出力の相対パスは作業ディレクトリ基準です。
 
