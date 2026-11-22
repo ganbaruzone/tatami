@@ -1,23 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tatami.Models;
 
 namespace Tatami.Services;
 
-public sealed class SiteBuilder
+public sealed class SiteBuilder(string? templateDirectory = null)
 {
     private static readonly SemaphoreSlim BuildLock = new(1, 1);
-    private readonly string _templates;
-
-    public SiteBuilder(string? templateDirectory = null) =>
-        _templates = templateDirectory ?? Path.Combine(AppContext.BaseDirectory, "Templates");
+    private readonly string _templates = templateDirectory ?? Path.Combine(AppContext.BaseDirectory, "Templates");
 
     public Task<BuildResult> BuildAsync(SiteConfig config, CancellationToken cancellationToken = default) =>
         BuildAsync(config.InputPath, config.OutputPath, cancellationToken);

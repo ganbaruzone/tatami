@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace Tatami.Services;
 
-internal static class PathSafety
+internal static partial class PathSafety
 {
     // Case-insensitive comparisons deliberately also protect portable sites on Windows/macOS.
     public static bool IsWithin(string path, string root) =>
@@ -17,7 +17,7 @@ internal static class PathSafety
     public static string Slug(string value)
     {
         value = value.Normalize(NormalizationForm.FormC);
-        if (!Regex.IsMatch(value, @"^[\p{L}\p{N}_-]+$", RegexOptions.CultureInvariant)
+        if (!MyRegex().IsMatch(value)
             || value.Length > 100 || Regex.IsMatch(value, @"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$", RegexOptions.IgnoreCase))
             throw new InvalidDataException($"不正なslugです: {value}（文字・数字・ハイフン・アンダースコア、100文字以内）");
         return value;
@@ -50,4 +50,7 @@ internal static class PathSafety
         RejectLinks(path);
         return path;
     }
+
+    [GeneratedRegex(@"^[\p{L}\p{N}_-]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex MyRegex();
 }

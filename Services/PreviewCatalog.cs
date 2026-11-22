@@ -21,9 +21,9 @@ public static class PreviewCatalog
         if (!File.Exists(manifest)) return [];
         var entries = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifest))
             ?? throw new InvalidDataException("生成物一覧を読み込めません。");
-        return entries.Keys.Where(key => key.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        return [.. entries.Keys.Where(key => key.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
             .Select(key => new PreviewPage(key == "index.html" ? "/" : key.EndsWith("/index.html", StringComparison.OrdinalIgnoreCase) ? key[..^11] : key, PathSafety.OutputFile(output, key)))
-            .Where(page => File.Exists(page.FullPath)).OrderBy(page => page.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+            .Where(page => File.Exists(page.FullPath)).OrderBy(page => page.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
     public static bool CanNavigate(Uri uri, string output)

@@ -8,10 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Tatami.Models;
 
 namespace Tatami.Views;
 
@@ -35,7 +33,7 @@ internal sealed class NoteFinderWindow : Window
     {
         _root = root;
         _searchContents = searchContents;
-        _paths = paths.ToArray();
+        _paths = [.. paths];
         _openDocuments = openDocuments;
         Title = searchContents ? "ノート全体を検索" : "ファイル名で開く";
         Width = 680;
@@ -116,13 +114,12 @@ internal sealed class NoteFinderWindow : Window
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (!_searchContents)
         {
-            return _paths.Select(path => new { Path = path, Relative = Path.GetRelativePath(_root, path) })
+            return [.. _paths.Select(path => new { Path = path, Relative = Path.GetRelativePath(_root, path) })
                 .Where(item => MatchesFilename(item.Relative, query))
                 .OrderBy(item => FilenameScore(item.Relative, query))
                 .ThenBy(item => item.Relative, StringComparer.OrdinalIgnoreCase)
                 .Take(MaxResults)
-                .Select(item => new NoteFinderResult(item.Path, null, item.Relative))
-                .ToArray();
+                .Select(item => new NoteFinderResult(item.Path, null, item.Relative))];
         }
 
         if (string.IsNullOrWhiteSpace(query)) return results;

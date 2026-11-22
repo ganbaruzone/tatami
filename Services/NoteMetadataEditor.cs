@@ -7,9 +7,9 @@ using System.Text.RegularExpressions;
 
 namespace Tatami.Services;
 
-public static class NoteMetadataEditor
+public static partial class NoteMetadataEditor
 {
-    private static readonly Regex SettingLine = new("^[\\\"']?(title|publish|slug)[\\\"']?\\s*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex SettingLine = MyRegex();
 
     public static string Apply(string text, string? title, bool publish, string? slug)
     {
@@ -63,4 +63,7 @@ public static class NoteMetadataEditor
         rows.Add("");
         return string.Join(newline, rows) + newline;
     }
+
+    [GeneratedRegex("^[\\\"']?(title|publish|slug)[\\\"']?\\s*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MyRegex();
 }

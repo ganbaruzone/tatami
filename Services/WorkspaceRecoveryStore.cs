@@ -9,11 +9,9 @@ using Tatami.Models;
 
 namespace Tatami.Services;
 
-public sealed class WorkspaceRecoveryStore
+public sealed class WorkspaceRecoveryStore(string? directory = null)
 {
-    private readonly string _directory;
-
-    public WorkspaceRecoveryStore(string? directory = null) => _directory = directory ?? Path.Combine(
+    private readonly string _directory = directory ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tatami", "recovery");
 
     private string GetPath(string workspace)
@@ -85,7 +83,7 @@ public sealed class WorkspaceRecoveryStore
         {
             WorkspacePath = root,
             ActiveTabIndex = Math.Clamp(snapshot.ActiveTabIndex, 0, valid.Count - 1),
-            Tabs = valid.ToArray()
+            Tabs = [.. valid]
         };
     }
 

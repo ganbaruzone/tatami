@@ -5,10 +5,9 @@ using Tatami.Models;
 
 namespace Tatami.Services;
 
-public sealed class WorkspaceSettings
+public sealed class WorkspaceSettings(string? path = null)
 {
-    private readonly string _path;
-    public WorkspaceSettings(string? path = null) => _path = path ?? Path.Combine(
+    private readonly string _path = path ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tatami", "workspace.json");
 
     public async Task<SiteConfig?> LoadAsync() => File.Exists(_path) ? await SiteConfig.LoadAsync(_path) : null;

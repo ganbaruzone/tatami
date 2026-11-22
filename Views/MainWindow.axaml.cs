@@ -1,11 +1,11 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Threading;
-using System.Xml;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,9 +14,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using AvaloniaEdit.Search;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using AvaloniaEdit.Search;
 using Tatami.Models;
 using Tatami.Services;
 
@@ -25,7 +25,7 @@ namespace Tatami.Views;
 public partial class MainWindow : Window
 {
     private sealed record BuildDiagnostic(string Path, int Line, string Message);
-    private static readonly Regex ParenthesizedDiagnostic = new(@"(?<path>(?:[A-Za-z]:)?[^\r\n]*?\.md)\((?<line>\d+)(?:,\d+)?\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex ParenthesizedDiagnostic = MyRegex();
     private static readonly Regex ColonDiagnostic = new(@"(?<path>(?:[A-Za-z]:)?[^\r\n]*?\.md):(?<line>\d+)(?::\d+)?(?:\s|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private string? _notesPath;
     private string? _outputPath;
@@ -187,18 +187,18 @@ public partial class MainWindow : Window
                 return;
             }
             _recoveryDeferred = false;
-            if (_activeTab != null) _activeTab.CaretOffset = Editor.TextArea.Caret.Offset;
+            _activeTab?.CaretOffset = Editor.TextArea.Caret.Offset;
             var snapshot = new WorkspaceRecoverySnapshot(
                 1,
                 Path.GetFullPath(_notesPath),
                 DateTimeOffset.UtcNow,
                 Math.Max(0, _tabs.IndexOf(_activeTab!)),
-                _tabs.Select(tab => new RecoveredNoteTab(
+                [.. _tabs.Select(tab => new RecoveredNoteTab(
                     tab.Path, tab.Buffer.Text, tab.Buffer.SavedHash, tab.IsDirty, tab.CaretOffset,
                     tab == _activeTab && _metadataPending,
                     tab == _activeTab && _metadataPending ? MetadataTitle.Text : null,
                     tab == _activeTab && _metadataPending ? MetadataSlug.Text : null,
-                    tab == _activeTab && _metadataPending && MetadataPublish.IsChecked == true)).ToArray());
+                    tab == _activeTab && _metadataPending && MetadataPublish.IsChecked == true))]);
             await _recoveryStore.SaveAsync(snapshot);
         }
         finally { _recoveryInProgress = false; }
@@ -229,13 +229,13 @@ public partial class MainWindow : Window
         {
             try
             {
-                var disk = await tab.Buffer.ReadDiskSnapshotAsync();
-                if (disk.Exists && disk.Hash == tab.Buffer.SavedHash)
+                var (Exists, Hash, Text) = await tab.Buffer.ReadDiskSnapshotAsync();
+                if (Exists && Hash == tab.Buffer.SavedHash)
                 {
                     _externalChanges.Remove(tab);
                     continue;
                 }
-                _externalChanges[tab] = (disk.Hash, disk.Text, disk.Exists);
+                _externalChanges[tab] = (Hash, Text, Exists);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -648,7 +648,7 @@ public partial class MainWindow : Window
     {
         if (tab == _activeTab) return;
         ApplyMetadataSettings();
-        if (_activeTab != null) _activeTab.CaretOffset = Editor.TextArea.Caret.Offset;
+        _activeTab?.CaretOffset = Editor.TextArea.Caret.Offset;
         _activeTab = tab;
         _buffer = tab.Buffer;
         _metadataPending = false;
@@ -801,7 +801,7 @@ public partial class MainWindow : Window
                 if (OutputLog.Text.Length > 100000) OutputLog.Text = OutputLog.Text[^100000..];
                 OutputScroll.ScrollToEnd();
             });
-            result = await new BuildCoordinator().BuildAsync(CurrentConfig, progress, _buildCancellation.Token);
+            result = await BuildCoordinator.BuildAsync(CurrentConfig, progress, _buildCancellation.Token);
         }
         finally
         {
@@ -877,7 +877,7 @@ public partial class MainWindow : Window
                 UpdateBufferStatus();
             }
             Editor.TextArea.Focus();
-            Log($"自動退避から { _tabs.Count } 個のタブを復元しました。");
+            Log($"自動退避から {_tabs.Count} 個のタブを復元しました。");
         }
         else if (choice == "discard")
         {
@@ -1217,4 +1217,7 @@ public partial class MainWindow : Window
         _allowClose = true;
         Close();
     }
+
+    [GeneratedRegex(@"(?<path>(?:[A-Za-z]:)?[^\r\n]*?\.md)\((?<line>\d+)(?:,\d+)?\)", RegexOptions.IgnoreCase | RegexOptions.Compiled, "ja-JP")]
+    private static partial Regex MyRegex();
 }

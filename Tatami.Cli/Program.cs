@@ -75,7 +75,7 @@ internal static class TatamiCli
                     return BuildUsageError(json, effective.OutputPath, "入力・出力ディレクトリが必要です。--input と --output を指定するか、設定してください。");
                 if (watch) return await RunWatchBuildAsync(effective);
                 var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
-                var result = await new BuildCoordinator().BuildAsync(effective, progress);
+                var result = await BuildCoordinator.BuildAsync(effective, progress);
                 if (json)
                     Console.WriteLine(JsonSerializer.Serialize(new { success = true, published = result.PublishedCount, privateCount = result.PrivateCount, output = result.OutputPath }));
                 else if (!_quiet)
@@ -416,7 +416,7 @@ internal static class TatamiCli
     private static async Task RunWatchBuildOnceAsync(SiteConfig config, CancellationToken cancellationToken)
     {
         var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
-        var result = await new BuildCoordinator().BuildAsync(config, progress, cancellationToken);
+        var result = await BuildCoordinator.BuildAsync(config, progress, cancellationToken);
         if (!_quiet) Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
     }
 

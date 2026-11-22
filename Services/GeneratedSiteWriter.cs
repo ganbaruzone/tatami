@@ -19,7 +19,7 @@ internal static class GeneratedSiteWriter
         var oldManifest = File.Exists(manifestPath)
             ? JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(manifestPath))
                 ?? throw new InvalidDataException("生成物一覧が空です。")
-            : new Dictionary<string, string>();
+            : [];
         var old = new Dictionary<string, string>(oldManifest, StringComparer.OrdinalIgnoreCase);
         foreach (var relative in generated.Keys)
         {

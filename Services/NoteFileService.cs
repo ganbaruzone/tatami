@@ -14,7 +14,7 @@ public sealed record TrashedNote(string Id, string OriginalPath, DateTimeOffset 
 }
 
 // An application trash keeps all operations portable and reversible, without permanent deletion.
-public sealed class NoteFileService
+public sealed partial class NoteFileService
 {
     public const string TrashFolderName = ".tatami-trash";
     private readonly string _root;
@@ -35,7 +35,7 @@ public sealed class NoteFileService
         if (string.IsNullOrWhiteSpace(name) || name != name.Trim() || name.StartsWith('.')
             || name.Any(char.IsControl) || name.IndexOfAny(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) >= 0
             || name.EndsWith('.') || name.Length > 120
-            || Regex.IsMatch(name.Split('.')[0], @"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$", RegexOptions.IgnoreCase))
+            || MyRegex().IsMatch(name.Split('.')[0]))
             throw new InvalidDataException("ファイル名が不正です。区切り記号・予約名・先頭や末尾の空白は使えません（120文字以内）。");
         if (!Path.HasExtension(name)) name += ".md";
         if (!Path.GetExtension(name).Equals(".md", StringComparison.OrdinalIgnoreCase))
@@ -130,10 +130,10 @@ public sealed class NoteFileService
     {
         PathSafety.RejectLinks(TrashRoot);
         if (!Directory.Exists(TrashRoot)) return [];
-        return Directory.EnumerateDirectories(TrashRoot)
+        return [.. Directory.EnumerateDirectories(TrashRoot)
             .Where(directory => File.Exists(Path.Combine(directory, "note.md")))
             .Select(directory => ReadEntry(Path.GetFileName(directory)))
-            .OrderByDescending(entry => entry.TrashedAt).ToArray();
+            .OrderByDescending(entry => entry.TrashedAt)];
     }
 
     public string Restore(string id)
@@ -147,4 +147,7 @@ public sealed class NoteFileService
         // Restored entries retain small metadata files; no payload means they are no longer in the trash list.
         return destination;
     }
+
+    [GeneratedRegex(@"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$", RegexOptions.IgnoreCase, "ja-JP")]
+    private static partial Regex MyRegex();
 }

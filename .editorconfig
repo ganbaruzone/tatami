@@ -1,0 +1,10 @@
+root = true
+
+[*.cs]
+dotnet_diagnostic.IDE0005.severity = warning
+
+# System名前空間を先頭に
+dotnet_sort_system_directives_first = true
+
+# usingグループを分離しない
+dotnet_separate_import_directive_groups = false

@@ -11,7 +11,7 @@ namespace Tatami.Services;
 
 public sealed class ExternalSiteBuilder
 {
-    public Task<BuildResult> BuildAsync(SiteConfig config, IProgress<string>? log = null, CancellationToken cancellationToken = default) =>
+    public static Task<BuildResult> BuildAsync(SiteConfig config, IProgress<string>? log = null, CancellationToken cancellationToken = default) =>
         Task.Run(() => BuildCoreAsync(config, log, cancellationToken), cancellationToken);
 
     private static async Task<BuildResult> BuildCoreAsync(SiteConfig config, IProgress<string>? log, CancellationToken cancellationToken)
@@ -86,7 +86,7 @@ public sealed class ExternalSiteBuilder
             {
                 try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
                 catch (InvalidOperationException) { }
-                await process.WaitForExitAsync();
+                await process.WaitForExitAsync(cancellationToken);
                 try { await Task.WhenAll(stdout, stderr); } catch (OperationCanceledException) { }
                 if (cancellationToken.IsCancellationRequested) throw;
                 throw new TimeoutException($"外部ビルドが{options.TimeoutSeconds}秒でタイムアウトしました。");

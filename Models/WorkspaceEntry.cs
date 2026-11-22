@@ -9,7 +9,7 @@ public sealed record WorkspaceEntry(string Name, string FullPath, bool IsDirecto
 {
     public bool IsExpanded { get; set; }
     public string Icon => IsDirectory ? "▸" : "M↓";
-    public static IReadOnlyList<WorkspaceEntry> Read(string path) => new DirectoryInfo(path)
+    public static IReadOnlyList<WorkspaceEntry> Read(string path) => [.. new DirectoryInfo(path)
         .EnumerateFileSystemInfos()
         .Where(info => (info.Attributes & FileAttributes.ReparsePoint) == 0)
         .Where(info => info is DirectoryInfo ? info.Name is not (".git" or "bin" or "obj" or "node_modules" or ".astro" or ".tatami-trash")
@@ -17,5 +17,5 @@ public sealed record WorkspaceEntry(string Name, string FullPath, bool IsDirecto
             : info.Extension.Equals(".md", StringComparison.OrdinalIgnoreCase))
         .OrderByDescending(info => info is DirectoryInfo).ThenBy(info => info.Name, StringComparer.OrdinalIgnoreCase)
         .Select(info => new WorkspaceEntry(info.Name, info.FullName, info is DirectoryInfo,
-            info is DirectoryInfo ? Read(info.FullName) : [])).ToArray();
+            info is DirectoryInfo ? Read(info.FullName) : []))];
 }
