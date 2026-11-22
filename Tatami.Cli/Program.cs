@@ -229,23 +229,55 @@ internal static class TatamiCli
         Check(".NET SDK", sdk is not null, sdk ?? "dotnet --version を実行できません");
 
         SiteConfig? config = null;
-        try { config = await ResolveConfigAsync(configPath); Check("設定", true, configPath is null ? "ユーザー設定を読み込みました" : Path.GetFullPath(configPath)); }
+        try
+        {
+            if (configPath is not null)
+            {
+                var fullPath = Path.GetFullPath(configPath);
+                if (!File.Exists(fullPath))
+                    Check("設定ファイル", false, $"見つかりません: {fullPath}");
+                else
+                {
+                    config = await SiteConfig.LoadAsync(fullPath);
+                    Check("設定ファイル", true, fullPath);
+                }
+            }
+            else
+            {
+                config = await new WorkspaceSettings().LoadAsync();
+                Check("ユーザー設定", config is not null,
+                    config is null ? "未設定です。config set または --config を使ってください。" : "読み込みました。");
+            }
+        }
         catch (Exception ex) { Check("設定", false, ex.Message); }
 
         if (config is not null)
         {
             var input = ResolveConfiguredPath(config.InputPath);
             var output = ResolveConfiguredPath(config.OutputPath);
-            Check("入力パス", input is not null && Directory.Exists(input), input ?? "未設定");
+            Check("入力パス", input is not null && Directory.Exists(input), input ?? "未設定または存在しません");
             Check("出力パス", output is not null && IsOutputPathSafe(input, output), output ?? "未設定または入力と競合");
+            Check("ビルダー設定", config.Builder is "builtin" or "external", config.Builder);
             if (config.Builder == "external")
             {
                 var executable = config.External.Executable;
-                var executableFound = await RunVersionAsync(executable, "--version") is not null;
-                Check("外部ビルダー実行ファイル", executableFound, executable);
-                Check("外部ビルダープロジェクト", Directory.Exists(config.External.ProjectPath), config.External.ProjectPath);
+                var version = await RunVersionAsync(executable, "--version");
+                Check("外部ビルダー実行ファイル", version is not null,
+                    version is null ? $"起動または --version に失敗: {executable}" : $"{executable} ({version})");
+                var project = ResolveConfiguredPath(config.External.ProjectPath);
+                Check("外部ビルダープロジェクト", project is not null && Directory.Exists(project), project ?? "未設定または存在しません");
+                Check("外部ビルドタイムアウト", config.External.TimeoutSeconds is >= 1 and <= 86400,
+                    $"{config.External.TimeoutSeconds} 秒（許容範囲: 1〜86400秒）");
+                if (project is not null)
+                {
+                    var inputSeparated = input is not null && !SamePath(input, project);
+                    Check("入力と外部プロジェクト", inputSeparated,
+                        inputSeparated ? "別々のフォルダです" : "ノートと外部プロジェクトに別のフォルダを指定してください");
+                    var outputSeparated = output is not null && !IsWithin(project, output);
+                    Check("出力先と外部プロジェクト", outputSeparated,
+                        outputSeparated ? "ビルダーの出力先はプロジェクト外です" : "出力先を外部プロジェクトの外側にしてください");
+                }
             }
-            else Check("ビルダー", config.Builder == "builtin", config.Builder);
         }
 
         return problems == 0 ? 0 : 1;
@@ -258,8 +290,14 @@ internal static class TatamiCli
     {
         if (input is null) return false;
         return Directory.Exists(input)
-            && !IsWithin(input, output)
-            && !IsWithin(output, input);
+            && !IsWithin(input, output);
+    }
+
+    private static bool SamePath(string left, string right)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(left))
+            .Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), comparison);
     }
 
     private static bool IsWithin(string path, string root)
@@ -272,9 +310,10 @@ internal static class TatamiCli
 
     private static async Task<string?> RunVersionAsync(string executable, string argument)
     {
+        Process? process = null;
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            process = Process.Start(new ProcessStartInfo
             {
                 FileName = executable,
                 ArgumentList = { argument },
@@ -285,13 +324,20 @@ internal static class TatamiCli
             });
             if (process is null) return null;
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await process.WaitForExitAsync(timeout.Token);
-            var stdout = await process.StandardOutput.ReadToEndAsync();
-            var stderr = await process.StandardError.ReadToEndAsync();
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try { await process.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                return null;
+            }
+            await Task.WhenAll(stdout, stderr);
             if (process.ExitCode != 0) return null;
-            return string.IsNullOrWhiteSpace(stdout) ? stderr.Trim() : stdout.Trim();
+            return string.IsNullOrWhiteSpace(stdout.Result) ? stderr.Result.Trim() : stdout.Result.Trim();
         }
         catch { return null; }
+        finally { process?.Dispose(); }
     }
 
     private static async Task<string> ResolveInputAsync(string? input)

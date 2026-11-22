@@ -145,8 +145,8 @@ VS Codeを参考にしたダークテーマで、左に階層型エクスプロ�
 
 ## 外部ビルダー
 
-「ビルダー設定…」で内蔵／外部コマンドを切り替えます。公開用Markdownの入力と静的HTMLの出力に対応する任意のコマンドを接続できます。[接続・操作ガイド](docs/usage.md) を参照してください。
+「ビルダー設定…」で内蔵／外部コマンドを切り替えます。公開用Markdownの入力と静的HTMLの出力に対応する任意のコマンドを接続できます。CLIの `tatami doctor` で実行ファイル・プロジェクト・パスを診断できます。[設定と導入ガイド](docs/usage.md#8-外部ビルダーを使う) を参照してください。
 
-`BuildCoordinator.BuildAsync(SiteConfig, IProgress<string>?, CancellationToken)` が選択したビルダーを実行します。既存の `SiteBuilder` は内蔵HTML生成用です。外部ツールには公開判定・非公開段落除去後の一時Markdownを環境変数 `TATAMI_CONTENT_DIR` で渡し、生成先は `TATAMI_OUTPUT_DIR` とします。ユーザーが設定したコマンドを直接実行し、標準出力／標準エラー・終了コード・中止・タイムアウトを扱います。
+`BuildCoordinator.BuildAsync(SiteConfig, IProgress<string>?, CancellationToken)` が選択したビルダーを実行します。既存の `SiteBuilder` は内蔵HTML生成用です。外部ツールには公開判定・非公開段落除去後の一時Markdownを環境変数 `TATAMI_CONTENT_DIR` で渡し、生成先は `TATAMI_OUTPUT_DIR` とします。ユーザーが設定したコマンドを直接実行し、標準出力／標準エラー・終了コード・中止・タイムアウトを扱います。導入・設定診断は[利用ガイド](docs/usage.md#8-外部ビルダーを使う)を参照してください。
 
 生成物反映は `GeneratedSiteWriter` を内蔵／外部で共用します。外部ツールのCSS・JS・画像やルートのindex.htmlも管理します。HTMLプレビューはASP.NET CoreのループバックHTTPサーバーを使い、生成物一覧に記録されたファイルだけを配信します。これに伴い `Microsoft.AspNetCore.App` フレームワーク参照を追加しました（新しいNuGetパッケージは不要）。SDKなしの環境ではASP.NET Core 10ランタイムも必要です。
