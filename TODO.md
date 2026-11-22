@@ -29,7 +29,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
-- [ ] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
+- [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [ ] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
 - [ ] `tatami notes trash <path>`、`tatami notes trash list`、`tatami notes restore <id>`: アプリ内ゴミ箱へ移動し、一覧・復元する。OSのゴミ箱への完全削除は行わない。
 - [ ] `tatami config show|set`: メモのディレクトリ、HTML出力先、ビルダー設定を確認・変更する。設定ファイルは任意の `--config` で指定でき、省略時はユーザー設定を使う。
@@ -58,6 +58,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - `dotnet build Tatami.Cli/Tatami.Cli.csproj --nologo`: 成功（警告0・エラー0）。
 - CLIのヘルプ、バージョン、ノート一覧、Front Matter表示、引数エラー終了コード2を確認。
 - `git diff --check`: 成功。
+
+### CLI `notes create` 実装記録（2026-11-22）
+
+入力ワークスペース直下または `--directory` の指定先にノートを作成します。作成先は `NoteFileService` の検査によりワークスペース内に制限され、新規ノートは非公開で同名項目を上書きしません。
 - ビルド、ノート変更、設定変更、ゴミ箱、doctor、JSON出力は未実装。
 
 ### CLI `build` 実装記録（2026-11-22）

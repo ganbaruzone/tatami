@@ -31,19 +31,21 @@ internal static class TatamiCli
         string? input = null;
         string? output = null;
         string? configPath = null;
+        string? directory = null;
         var json = false;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] is "--quiet" or "--verbose") continue;
             if (args[i] == "--json") { json = true; continue; }
-            if (args[i] is "--input" or "--output" or "--config")
+            if (args[i] is "--input" or "--output" or "--config" or "--directory")
             {
                 var option = args[i];
                 if (++i >= args.Length || args[i].StartsWith("--", StringComparison.Ordinal))
                     return UsageError($"{option} には値を指定してください。");
                 if (option == "--input") input = args[i];
                 else if (option == "--output") output = args[i];
-                else configPath = args[i];
+                else if (option == "--config") configPath = args[i];
+                else directory = args[i];
                 continue;
             }
             if (args[i].StartsWith('-')) return UsageError($"不明なオプションです: {args[i]}");
@@ -68,6 +70,16 @@ internal static class TatamiCli
                     Console.WriteLine(JsonSerializer.Serialize(new { success = true, published = result.PublishedCount, privateCount = result.PrivateCount, output = result.OutputPath }));
                 else if (!_quiet)
                     Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
+                return 0;
+            }
+            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "create")
+            {
+                var root = await ResolveInputAsync(input);
+                var targetDirectory = directory is null
+                    ? root
+                    : Path.GetFullPath(Path.Combine(root, directory));
+                var created = new NoteFileService(root).Create(targetDirectory, positional[2]);
+                Console.WriteLine(Path.GetRelativePath(root, created));
                 return 0;
             }
             if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
@@ -152,12 +164,14 @@ tatami {Version}
 使い方:
   tatami [--quiet|--verbose] notes list [--input <dir>]
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
+  tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
 
 notes list   Markdownノートを再帰的に一覧表示します（公開状態つき）。
 notes show   Front Matterと公開判定を表示します。
+notes create 非公開の新規ノートを作成します。
 build        設定済みビルダーでサイトを生成します。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。

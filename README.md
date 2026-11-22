@@ -21,10 +21,11 @@ Avaloniaの画面を起動せずにノートを確認できます。リポジト
 dotnet run --project Tatami.Cli -- --help
 dotnet run --project Tatami.Cli -- notes list --input ./notes
 dotnet run --project Tatami.Cli -- notes show welcome.md --input ./notes
+dotnet run --project Tatami.Cli -- notes create welcome --input ./notes
 dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output --json
 ```
 
-`notes list` は公開状態と相対パスを表示し、`notes show` はFront Matterと公開判定を表示します。`build` は内蔵または設定済み外部ビルダーを使います。入力・出力の省略時は `--config <file>` またはアプリのユーザー設定を参照します。`--json` は件数・出力先・成否をJSONで出します。成功は終了コード0、実行時エラーは1、引数エラーは2です。ノートの変更、設定変更、ゴミ箱操作、`doctor` は後続実装です。
+`notes list` は公開状態と相対パスを表示し、`notes show` はFront Matterと公開判定を表示します。`notes create` は `publish: false` の新規ノートを作成し、`--directory` で入力内の作成先を選べます。`build` は内蔵または設定済み外部ビルダーを使います。入力・出力の省略時は `--config <file>` またはアプリのユーザー設定を参照します。`--json` は件数・出力先・成否をJSONで出します。成功は終了コード0、実行時エラーは1、引数エラーは2です。ノートの名前変更・ゴミ箱、設定変更、`doctor` は後続実装です。
 
 ## 使い方
 
