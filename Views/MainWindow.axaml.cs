@@ -28,8 +28,10 @@ public partial class MainWindow : Window
     private readonly WorkspaceSettings _settings = new();
     private readonly WorkspaceRecoveryStore _recoveryStore = new();
     private readonly DispatcherTimer _recoveryTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly DispatcherTimer _livePreviewTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private NativeWebView? _webView;
     private bool _refreshingPages;
+    private bool _livePreviewActive;
     private string _builder = "builtin";
     private ExternalBuildOptions _external = new();
     private CancellationTokenSource? _buildCancellation;
@@ -67,6 +69,7 @@ public partial class MainWindow : Window
             if (_buffer != null && !_suppressMetadataChanges && !_metadataPending)
                 LoadMetadataSettings(Editor.Text);
             UpdateBufferStatus();
+            if (PreviewPane.IsVisible) RequestLivePreviewRefresh();
         };
         MetadataPublish.PropertyChanged += (_, e) =>
         {
@@ -80,7 +83,8 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         _recoveryTimer.Tick += async (_, _) => await BackupTickAsync();
         _recoveryTimer.Start();
-        Closed += async (_, _) => { _recoveryTimer.Stop(); await _previewServer.DisposeAsync(); };
+        _livePreviewTimer.Tick += async (_, _) => await UpdateLivePreviewAsync();
+        Closed += async (_, _) => { _recoveryTimer.Stop(); _livePreviewTimer.Stop(); await _previewServer.DisposeAsync(); };
         Opened += async (_, _) => await RunAsync(RestoreWorkspaceAsync);
     }
 
@@ -830,6 +834,7 @@ public partial class MainWindow : Window
         if (_outputPath == null) { Log("先にHTML出力先を選択してビルドしてください。"); return; }
         var pages = await PreviewCatalog.ReadAsync(_outputPath);
         await _previewServer.StartAsync(_outputPath);
+        _livePreviewActive = _buffer != null;
         _refreshingPages = true;
         try
         {
@@ -846,11 +851,63 @@ public partial class MainWindow : Window
         finally { _refreshingPages = false; }
         EditingPane.IsVisible = false;
         PreviewPane.IsVisible = true;
+        await UpdateLivePreviewAsync();
         NavigateSelectedPage();
+    }
+
+    private void RequestLivePreviewRefresh()
+    {
+        _livePreviewActive = _buffer != null;
+        if (_buffer == null || _outputPath == null) return;
+        _livePreviewTimer.Stop();
+        _livePreviewTimer.Start();
+    }
+
+    private async Task UpdateLivePreviewAsync()
+    {
+        _livePreviewTimer.Stop();
+        if (_buffer == null || _outputPath == null || _previewServer.BaseUri == null) return;
+        try
+        {
+            var text = Editor.Text;
+            if (_metadataPending)
+                text = NoteMetadataEditor.Apply(text, MetadataTitle.Text, MetadataPublish.IsChecked == true, MetadataSlug.Text);
+            var note = new NoteRepository().Parse(_buffer.Path, text);
+            var renderer = new TemplateRenderer(Path.Combine(AppContext.BaseDirectory, "Templates", "default.html"));
+            _previewServer.SetLivePreview(renderer.Render(note));
+            if (_livePreviewActive)
+            {
+                PreviewStatus.Text = "編集中の記事のライブプレビュー";
+                NavigateLivePreview();
+            }
+        }
+        catch (Exception ex)
+        {
+            PreviewStatus.Text = $"ライブプレビューを更新できません: {ex.Message}";
+        }
+        await Task.CompletedTask;
+    }
+
+    private void NavigateLivePreview()
+    {
+        var uri = _previewServer.GetLivePreviewUri();
+        EnsureWebView();
+        PreviewStatus.Text = "編集中の記事のライブプレビュー";
+        if (_webView!.Source == uri) _webView.Refresh();
+        else _webView.Navigate(uri);
     }
 
     private void NavigateSelectedPage()
     {
+        if (_livePreviewActive && _buffer != null)
+        {
+            if (_previewServer.BaseUri != null && _previewServer.GetLivePreviewUri() is { } liveUri)
+            {
+                EnsureWebView();
+                if (_webView!.Source == liveUri) _webView.Refresh(); else _webView.Navigate(liveUri);
+            }
+            return;
+        }
         if (PreviewPages.SelectedItem is not PreviewPage page)
         {
             _webView?.Navigate(new Uri("about:blank"));
@@ -860,40 +917,45 @@ public partial class MainWindow : Window
         var uri = _previewServer.GetUri(page.FullPath);
         if (!_previewServer.CanNavigate(uri))
             throw new IOException("プレビュー対象のHTMLが見つからないか、許可された出力先の範囲外です。");
-        if (_webView == null)
-        {
-            _webView = new NativeWebView();
-            _webView.NewWindowRequested += (_, args) =>
-            {
-                args.Handled = true;
-                PreviewStatus.Text = "プレビューから別ウィンドウは開きません。";
-            };
-            _webView.NavigationStarted += (_, args) =>
-            {
-                if (args.Request == null || !_previewServer.CanNavigate(args.Request))
-                {
-                    args.Cancel = true;
-                    PreviewStatus.Text = "プレビューでは出力先のHTMLだけを開けます。";
-                }
-            };
-            _webView.NavigationCompleted += (_, args) =>
-            {
-                if (args.Request == null || args.Request.ToString() == "about:blank") return;
-                PreviewStatus.Text = args.IsSuccess
-                    ? "ビルド済みHTML — 編集の反映には再ビルドが必要です。"
-                    : "HTMLを読み込めませんでした。WebViewの実行環境とファイルを確認してください。";
-                if (!args.IsSuccess) Log(PreviewStatus.Text, true);
-            };
-            PreviewHost.Content = _webView;
-        }
+        EnsureWebView();
         PreviewStatus.Text = $"読み込み中: {page.Name}";
-        if (_webView.Source == uri) _webView.Refresh();
+        if (_webView!.Source == uri) _webView.Refresh();
         else _webView.Navigate(uri);
+    }
+
+    private void EnsureWebView()
+    {
+        if (_webView != null) return;
+        _webView = new NativeWebView();
+        _webView.NewWindowRequested += (_, args) =>
+        {
+            args.Handled = true;
+            PreviewStatus.Text = "プレビューから別ウィンドウは開きません。";
+        };
+        _webView.NavigationStarted += (_, args) =>
+        {
+            if (args.Request == null || !_previewServer.CanNavigate(args.Request))
+            {
+                args.Cancel = true;
+                PreviewStatus.Text = "プレビューでは出力先のHTMLだけを開けます。";
+            }
+        };
+        _webView.NavigationCompleted += (_, args) =>
+        {
+            if (args.Request == null || args.Request.ToString() == "about:blank") return;
+            if (_livePreviewActive) PreviewStatus.Text = "編集中の記事のライブプレビュー";
+            else PreviewStatus.Text = args.IsSuccess
+                ? "ビルド済みHTML — 編集の反映には再ビルドが必要です。"
+                : "HTMLを読み込めませんでした。WebViewの実行環境とファイルを確認してください。";
+            if (!args.IsSuccess) Log(PreviewStatus.Text, true);
+        };
+        PreviewHost.Content = _webView;
     }
 
     private void PreviewPageSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (_refreshingPages) return;
+        _livePreviewActive = false;
         try { NavigateSelectedPage(); }
         catch (Exception ex) { Log(ex.Message, true); }
     }

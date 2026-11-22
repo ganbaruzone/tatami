@@ -36,7 +36,7 @@
                     <Button Click="GetFiles" Content="メモを開く" />
                     <Button Click="QuickOpen" Content="ファイルを開く…" ToolTip.Tip="ファイル名で開く  ⌘P / Ctrl+P" />
                     <Button Click="SearchAllNotes" Content="全体検索" ToolTip.Tip="ノート本文を検索  ⌘⇧F / Ctrl+Shift+F" />
-                    <Button Click="TogglePreview" Content="編集 / HTML" ToolTip.Tip="編集画面とビルド済みHTMLを切り替え" />
+                    <Button Click="TogglePreview" Content="編集 / HTML" ToolTip.Tip="編集中の記事のライブプレビューとビルド済みHTMLを切り替え" />
                     <Button Name="SaveButton" Click="SaveFile" Content="保存" IsEnabled="False" ToolTip.Tip="保存  ⌘S / Ctrl+S" />
                     <Button Name="BuildSiteButton" Click="BuildSite" Content="▷  サイトをビルド" Background="#285D4D" Foreground="#E3F5EB" />
                 </StackPanel>

@@ -22,6 +22,8 @@ public sealed class PreviewServer : IAsyncDisposable
     private WebApplication? _application;
     private string? _root;
     private HashSet<string> _generated = new(StringComparer.Ordinal);
+    private string? _liveHtml;
+    private const string LivePreviewPath = "/__tatami_live/index.html";
     public Uri? BaseUri { get; private set; }
 
     public async Task StartAsync(string output)
@@ -49,6 +51,15 @@ public sealed class PreviewServer : IAsyncDisposable
             if (BaseUri == null || context.Request.Host.Value != BaseUri.Authority
                 || context.Request.Method is not ("GET" or "HEAD"))
             { context.Response.StatusCode = 403; return; }
+            if (context.Request.Path.Value == LivePreviewPath && _liveHtml is { } liveHtml)
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength = System.Text.Encoding.UTF8.GetByteCount(liveHtml);
+                if (context.Request.Method != "HEAD") await context.Response.WriteAsync(liveHtml);
+                return;
+            }
             var path = Resolve(context.Request.Path.Value ?? "/");
             if (path == null) { context.Response.StatusCode = 404; return; }
             context.Response.Headers.CacheControl = "no-store";
@@ -87,9 +98,18 @@ public sealed class PreviewServer : IAsyncDisposable
         return new Uri(BaseUri, string.Join('/', relative.Split('/').Select(Uri.EscapeDataString)));
     }
 
+    public void SetLivePreview(string html) => _liveHtml = html;
+
+    public Uri GetLivePreviewUri()
+    {
+        if (BaseUri == null || _liveHtml == null) throw new InvalidOperationException("ライブプレビューが準備できていません。");
+        return new Uri(BaseUri, LivePreviewPath.TrimStart('/'));
+    }
+
     public bool CanNavigate(Uri uri) => uri.ToString() == "about:blank" ||
         (BaseUri != null && uri.Scheme == BaseUri.Scheme && uri.Authority == BaseUri.Authority
-         && Resolve(Uri.UnescapeDataString(uri.AbsolutePath)) is { } path && Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase));
+         && (Uri.UnescapeDataString(uri.AbsolutePath) == LivePreviewPath && _liveHtml != null
+             || Resolve(Uri.UnescapeDataString(uri.AbsolutePath)) is { } path && Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase)));
 
     public async ValueTask DisposeAsync()
     {
@@ -97,5 +117,6 @@ public sealed class PreviewServer : IAsyncDisposable
         _application = null;
         BaseUri = null;
         _root = null;
+        _liveHtml = null;
     }
 }
