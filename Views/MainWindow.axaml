@@ -93,18 +93,24 @@
                     <RowDefinition Height="4" />
                     <RowDefinition Height="170" MinHeight="80" />
                 </Grid.RowDefinitions>
-                <Grid Name="EditingPane" RowDefinitions="38,30,*" Background="#181A1F">
+                <Grid Name="EditingPane" RowDefinitions="38,Auto,30,*" Background="#181A1F">
                     <Border Background="#202229" BorderBrush="#30333B" BorderThickness="0,0,0,1">
                         <Border Background="#181A1F" BorderBrush="#82C6AF" BorderThickness="0,2,0,0" HorizontalAlignment="Left" MinWidth="180" Padding="16,0">
                             <TextBlock Name="BufferTab" Text="ようこそ" VerticalAlignment="Center" FontSize="12" />
                         </Border>
                     </Border>
-                    <TextBlock Name="Breadcrumb" Grid.Row="1" Text="Tatami  /  Markdown editor" Margin="20,0" Foreground="#828C9E" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <edit:TextEditor Name="Editor" Grid.Row="2" ShowLineNumbers="True" IsVisible="False"
+                    <Grid Name="MetadataPanel" Grid.Row="1" ColumnDefinitions="Auto,*,*,Auto" Margin="12,5" ColumnSpacing="8">
+                        <CheckBox Name="MetadataPublish" Content="公開" VerticalAlignment="Center" ToolTip.Tip="チェックするとビルド対象になります" />
+                        <TextBox Name="MetadataTitle" Grid.Column="1" PlaceholderText="タイトル" VerticalAlignment="Center" ToolTip.Tip="公開ページのタイトル（空欄ならファイル名）" />
+                        <TextBox Name="MetadataSlug" Grid.Column="2" PlaceholderText="slug（任意）" VerticalAlignment="Center" ToolTip.Tip="公開URL。空欄ならファイル名から生成" />
+                        <Button Name="ApplyMetadataButton" Grid.Column="3" Content="適用" Click="ApplyMetadata" IsEnabled="False" ToolTip.Tip="設定をFront Matterに反映" />
+                    </Grid>
+                    <TextBlock Name="Breadcrumb" Grid.Row="2" Text="Tatami  /  Markdown editor" Margin="20,0" Foreground="#828C9E" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <edit:TextEditor Name="Editor" Grid.Row="3" ShowLineNumbers="True" IsVisible="False"
                                      Background="#181A1F" Foreground="#D7DAE0" LineNumbersForeground="#626C7D"
                                      FontFamily="Menlo,Consolas,monospace" FontSize="14" Padding="12,12,20,24"
                                      WordWrap="True" />
-                    <StackPanel Name="Welcome" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
+                    <StackPanel Name="Welcome" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
                         <TextBlock Text="書く。つなぐ。公開する。" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="左の一覧からMarkdownファイルを開いてください。" Foreground="#959EAE" FontSize="13" />
                         <TextBlock Text="⌘S / Ctrl+S  保存     ·     ⌘F / Ctrl+F  検索" Foreground="#697487" FontSize="12" />

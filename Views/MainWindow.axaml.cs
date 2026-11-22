@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private WorkspaceEntry? _selected;
     private bool _busy;
     private bool _changingSelection;
+    private bool _suppressMetadataChanges;
+    private bool _metadataPending;
     private bool _allowClose;
 
     public MainWindow()
@@ -48,8 +50,16 @@ public partial class MainWindow : Window
         Editor.TextChanged += (_, _) =>
         {
             if (_buffer != null) _buffer.Text = Editor.Text;
+            if (_buffer != null && !_suppressMetadataChanges && !_metadataPending)
+                LoadMetadataSettings(Editor.Text);
             UpdateBufferStatus();
         };
+        MetadataPublish.PropertyChanged += (_, e) =>
+        {
+            if (e.Property.Name == nameof(MetadataPublish.IsChecked)) MetadataSettingChanged(MetadataPublish, EventArgs.Empty);
+        };
+        MetadataTitle.TextChanged += MetadataSettingChanged;
+        MetadataSlug.TextChanged += MetadataSettingChanged;
         Editor.TextArea.Caret.PositionChanged += (_, _) =>
             CursorStatus.Text = $"行 {Editor.TextArea.Caret.Line}, 列 {Editor.TextArea.Caret.Column}";
         AddHandler(KeyDownEvent, HandleShortcut, RoutingStrategies.Tunnel);
@@ -76,12 +86,60 @@ public partial class MainWindow : Window
 
     private void UpdateBufferStatus()
     {
-        SaveButton.IsEnabled = !_busy && _buffer?.IsDirty == true;
+        var dirty = _buffer?.IsDirty == true || _metadataPending;
+        SaveButton.IsEnabled = !_busy && _buffer != null && dirty;
+        MetadataPanel.IsEnabled = !_busy && _buffer != null;
+        ApplyMetadataButton.IsEnabled = !_busy && _buffer != null && _metadataPending;
         RenameNoteButton.IsEnabled = TrashNoteButton.IsEnabled = !_busy && _buffer != null;
-        BufferTab.Text = _buffer == null ? "ようこそ" : $"M↓  {Path.GetFileName(_buffer.Path)}{(_buffer.IsDirty ? "  ●" : "")}";
-        Title = _buffer == null ? "Tatami" : $"{(_buffer.IsDirty ? "● " : "")}{Path.GetFileName(_buffer.Path)} — Tatami";
+        BufferTab.Text = _buffer == null ? "ようこそ" : $"M↓  {Path.GetFileName(_buffer.Path)}{(dirty ? "  ●" : "")}";
+        Title = _buffer == null ? "Tatami" : $"{(dirty ? "● " : "")}{Path.GetFileName(_buffer.Path)} — Tatami";
         if (_buffer != null) EncodingStatus.Text = $"{_buffer.EncodingName}   Markdown";
     }
+
+    private void MetadataSettingChanged(object? sender, EventArgs e)
+    {
+        if (_suppressMetadataChanges || _buffer == null) return;
+        _metadataPending = true;
+        UpdateBufferStatus();
+    }
+
+    private void LoadMetadataSettings(string text)
+    {
+        _suppressMetadataChanges = true;
+        try
+        {
+            var note = new NoteRepository().Parse(_buffer?.Path ?? "note.md", text);
+            MetadataPublish.IsChecked = note.Metadata.Publish;
+            MetadataTitle.Text = note.Metadata.Title ?? "";
+            MetadataSlug.Text = note.Metadata.Slug ?? "";
+        }
+        catch
+        {
+            MetadataPublish.IsChecked = false;
+            MetadataTitle.Text = "";
+            MetadataSlug.Text = "";
+        }
+        finally { _suppressMetadataChanges = false; }
+    }
+
+    private void ApplyMetadataSettings()
+    {
+        if (_buffer == null || !_metadataPending) return;
+        var updated = NoteMetadataEditor.Apply(Editor.Text, MetadataTitle.Text, MetadataPublish.IsChecked == true, MetadataSlug.Text);
+        _metadataPending = false;
+        if (!string.Equals(updated, Editor.Text, StringComparison.Ordinal))
+        {
+            _suppressMetadataChanges = true;
+            try { Editor.Document.Replace(0, Editor.Document.TextLength, updated); }
+            finally { _suppressMetadataChanges = false; }
+            _buffer.Text = Editor.Text;
+        }
+        LoadMetadataSettings(Editor.Text);
+        UpdateBufferStatus();
+    }
+
+    private async void ApplyMetadata(object? sender, RoutedEventArgs e) =>
+        await RunAsync(() => { ApplyMetadataSettings(); return Task.CompletedTask; });
 
     private void Log(string message, bool error = false)
     {
@@ -113,7 +171,9 @@ public partial class MainWindow : Window
 
     private async Task SaveCurrentAsync()
     {
-        if (_buffer == null || !_buffer.IsDirty) return;
+        if (_buffer == null) return;
+        ApplyMetadataSettings();
+        if (!_buffer.IsDirty) return;
         await _buffer.SaveAsync();
         UpdateBufferStatus();
         Log($"保存しました: {_buffer.Path}");
@@ -121,7 +181,7 @@ public partial class MainWindow : Window
 
     private async Task<bool> ConfirmUnsavedAsync()
     {
-        if (_buffer?.IsDirty != true) return true;
+        if (_buffer?.IsDirty != true && !_metadataPending) return true;
         var dialog = new Window
         {
             Title = "未保存の変更", Width = 480, SizeToContent = SizeToContent.Height,
@@ -139,7 +199,7 @@ public partial class MainWindow : Window
             Margin = new Thickness(24), Spacing = 20,
             Children =
             {
-                new TextBlock { Text = $"{Path.GetFileName(_buffer.Path)} の変更を保存しますか？", TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"{(_buffer is null ? "ノート" : Path.GetFileName(_buffer.Path))} の変更を保存しますか？", TextWrapping = TextWrapping.Wrap },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
                     Children = { cancel, discard, save } }
             }
@@ -167,6 +227,7 @@ public partial class MainWindow : Window
         var entries = await Task.Run(() => WorkspaceEntry.Read(path));
         _notesPath = path;
         _buffer = null;
+        _metadataPending = false;
         _selected = null;
         _changingSelection = true;
         try { FileTree.ItemsSource = entries; FileTree.SelectedItem = null; }
@@ -234,8 +295,10 @@ public partial class MainWindow : Window
 
     private void ShowBuffer(EditorBuffer? buffer)
     {
+        _metadataPending = false;
         _buffer = buffer;
         Editor.Text = buffer?.Text ?? "";
+        LoadMetadataSettings(Editor.Text);
         Editor.Document.UndoStack.ClearAll();
         Editor.TextArea.Caret.Offset = 0;
         EditingPane.IsVisible = true;
@@ -506,7 +569,7 @@ public partial class MainWindow : Window
     {
         if (_allowClose) return;
         if (_busy) { e.Cancel = true; return; }
-        if (_buffer?.IsDirty != true) return;
+        if (_buffer?.IsDirty != true && !_metadataPending) return;
         e.Cancel = true;
         var close = false;
         await RunAsync(async () => close = await ConfirmUnsavedAsync());
