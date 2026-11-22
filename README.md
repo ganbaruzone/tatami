@@ -144,7 +144,7 @@ VS Codeを参考にしたダークテーマで、左に階層型エクスプロ�
 
 ## 外部ビルダー
 
-「ビルダー設定…」で内蔵／外部コマンドを切り替えます。Astroをはじめ、公開用Markdownの入力と静的HTMLの出力に対応する任意のコマンドを接続できます。[Astroサンプル](examples/astro/README.md) と [接続・操作ガイド](docs/usage.md) を参照してください。
+「ビルダー設定…」で内蔵／外部コマンドを切り替えます。公開用Markdownの入力と静的HTMLの出力に対応する任意のコマンドを接続できます。[接続・操作ガイド](docs/usage.md) を参照してください。
 
 `BuildCoordinator.BuildAsync(SiteConfig, IProgress<string>?, CancellationToken)` が選択したビルダーを実行します。既存の `SiteBuilder` は内蔵HTML生成用です。外部ツールには公開判定・非公開段落除去後の一時Markdownを環境変数 `TATAMI_CONTENT_DIR` で渡し、生成先は `TATAMI_OUTPUT_DIR` とします。ユーザーが設定したコマンドを直接実行し、標準出力／標準エラー・終了コード・中止・タイムアウトを扱います。
 

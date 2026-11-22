@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Tatami.Services;
 
-// Loopback HTTP is necessary for generators that emit /_astro/... assets and directory URLs.
+// Loopback HTTP supports root-relative assets and directory URLs from external generators.
 public sealed class PreviewServer : IAsyncDisposable
 {
     private WebApplication? _application;

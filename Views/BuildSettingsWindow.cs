@@ -17,7 +17,7 @@ public sealed class BuildSettingsWindow : Window
         Width = 650; Height = 620; MinWidth = 500; MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
-        var mode = new ComboBox { ItemsSource = new[] { "Tatami 内蔵", "外部コマンド（Astroなど）" }, SelectedIndex = builder == "external" ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var mode = new ComboBox { ItemsSource = new[] { "Tatami 内蔵", "外部コマンド" }, SelectedIndex = builder == "external" ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         var project = new TextBox { Text = options.ProjectPath, PlaceholderText = "外部ビルダーのプロジェクトフォルダ" };
         var executable = new TextBox { Text = options.Executable, PlaceholderText = "node または実行ファイルの絶対パス" };
         var arguments = new TextBox { Text = string.Join('\n', options.Arguments), AcceptsReturn = true, MinHeight = 90, PlaceholderText = "引数を1行ずつ入力（引用符は不要）" };
@@ -28,7 +28,7 @@ public sealed class BuildSettingsWindow : Window
             var selected = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false });
             if (selected.Count > 0) project.Text = selected[0].TryGetLocalPath();
         };
-        var preset = new Button { Content = "Astroの実行設定を入力" };
+        var preset = new Button { Content = "Node.jsのビルド設定を入力" };
         preset.Click += (_, _) =>
         {
             mode.SelectedIndex = 1;
@@ -67,7 +67,7 @@ public sealed class BuildSettingsWindow : Window
                     new TextBlock { Text = "実行ファイル" }, executable,
                     new TextBlock { Text = "引数（1行につき1引数）" }, arguments,
                     new TextBlock { Text = "タイムアウト（秒）" }, timeout,
-                    new TextBlock { Text = "外部ツールは公開用Markdownを TATAMI_CONTENT_DIR から読み、生成物を TATAMI_OUTPUT_DIR に書き出すよう設定してください。引数の {content} / {output} でも渡せます。Astroの設定例は examples/astro にあります。", TextWrapping = TextWrapping.Wrap, FontSize = 12 },
+                    new TextBlock { Text = "外部ツールは公開用Markdownを TATAMI_CONTENT_DIR から読み、生成物を TATAMI_OUTPUT_DIR に書き出すよう設定してください。引数の {content} / {output} でも渡せます。", TextWrapping = TextWrapping.Wrap, FontSize = 12 },
                     error,
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, Children = { cancel, save } }
                 }
