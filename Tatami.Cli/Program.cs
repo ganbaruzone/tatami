@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Tatami.Models;
 using Tatami.Services;
 
@@ -194,6 +195,44 @@ internal static class TatamiCli
                     if (_verbose && note.Metadata.Title is { Length: > 0 } title) Console.Error.WriteLine($"  title: {title}");
                 }
                 if (!_quiet) Console.Error.WriteLine($"{notes.Length} 件のノート");
+                return 0;
+            }
+            if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "validate")
+            {
+                var root = await ResolveInputAsync(input);
+                var errors = new List<string>();
+                var slugs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                Note[] notes;
+                try { notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output")).ToArray(); }
+                catch (InvalidDataException ex)
+                {
+                    Console.Error.WriteLine($"NG\t{ex.Message}");
+                    return 1;
+                }
+                foreach (var note in notes)
+                {
+                    if (!PublishFilter.IsPublic(note)) continue;
+                    var relative = Path.GetRelativePath(root, note.SourcePath);
+                    try
+                    {
+                        var slug = note.Metadata.Slug is null
+                            ? GetFileSlug(Path.GetFileNameWithoutExtension(note.SourcePath))
+                            : GetSlug(note.Metadata.Slug);
+                        if (slugs.TryGetValue(slug, out var previous))
+                            errors.Add($"{relative}: slug '{slug}' が {previous} と重複しています。");
+                        else slugs.Add(slug, relative);
+                        _ = PrivateContentFilter.Remove(note.Markdown);
+                    }
+                    catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
+                    { errors.Add($"{relative}: {ex.Message}"); }
+                }
+                if (errors.Count > 0)
+                {
+                    foreach (var error in errors) Console.Error.WriteLine($"NG\t{error}");
+                    Console.Error.WriteLine($"検査失敗: {errors.Count} 件");
+                    return 1;
+                }
+                Console.WriteLine($"検査成功: {notes.Length} 件（公開 {slugs.Count} 件）");
                 return 0;
             }
             if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "show")
@@ -398,6 +437,18 @@ internal static class TatamiCli
         return fullPath;
     }
 
+    private static string GetFileSlug(string name) => GetSlug(Regex.Replace(name.Trim(), @"\s+", "-"));
+
+    private static string GetSlug(string value)
+    {
+        value = value.Normalize(System.Text.NormalizationForm.FormC);
+        if (!Regex.IsMatch(value, @"^[\p{L}\p{N}_-]+$", RegexOptions.CultureInvariant)
+            || value.Length > 100
+            || Regex.IsMatch(value, @"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$", RegexOptions.IgnoreCase))
+            throw new InvalidDataException($"不正なslugです: {value}（文字・数字・ハイフン・アンダースコア、100文字以内）");
+        return value;
+    }
+
     private static int UsageError(string message)
     {
         Console.Error.WriteLine($"引数エラー: {message}");
@@ -410,6 +461,7 @@ internal static class TatamiCli
 tatami {Version}
 使い方:
   tatami [--quiet|--verbose] notes list [--input <dir>]
+  tatami [--quiet|--verbose] notes validate [--input <dir>]
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
   tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
   tatami [--quiet|--verbose] notes rename <path> <name> [--input <dir>]
@@ -425,6 +477,7 @@ tatami {Version}
   tatami --version
 
 notes list   Markdownノートを再帰的に一覧表示します（公開状態つき）。
+notes validate Front Matter、公開slugの重複、非公開ブロックを検査します（出力先は変更しません）。
 notes show   Front Matterと公開判定を表示します。
 notes create 非公開の新規ノートを作成します。
 notes rename ファイル名を変更します（既存ファイルは上書きしません）。

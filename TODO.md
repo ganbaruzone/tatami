@@ -28,6 +28,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami --help` / `tatami --version`: 使用方法・実装済みサブコマンド・バージョンを表示する。
 - [x] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
+- [x] `tatami notes validate`: 出力先を変更せずFront Matter・公開slug重複・公開本文の非公開ブロックを検査する。
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
 - [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [x] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
@@ -62,6 +63,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `preview` 実装記録（2026-11-22）
 
 `tatami preview` は設定済みHTML出力先、または `--output` で指定した生成物を127.0.0.1の一時ポートで配信します。コマンドはサーバー稼働中に待機し、Ctrl+Cで停止します。マニフェスト内で管理されたファイルだけを配信し、HTMLがない場合は先にビルドするよう案内します。
+
+### CLI `notes validate` 実装記録（2026-11-22）
+
+ノート全件のFront Matterを読み込み、公開slugの形式と重複、公開本文の `:::private` 閉じ忘れを検査します。サイト出力先には書き込みません。不備があれば診断を標準エラーへ表示して終了コード1を返します。
 - CLIサブコマンドごとの実装記録は後続の各節を参照。
 
 ### CLI `notes create` 実装記録（2026-11-22）

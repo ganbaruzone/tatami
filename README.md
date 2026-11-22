@@ -27,6 +27,7 @@ framework-dependentで発行されるため、実行先には.NET 10ランタイ
 ```sh
 dotnet run --project Tatami.Cli -- --help
 dotnet run --project Tatami.Cli -- notes list --input ./notes
+dotnet run --project Tatami.Cli -- notes validate --input ./notes
 dotnet run --project Tatami.Cli -- notes show welcome.md --input ./notes
 dotnet run --project Tatami.Cli -- notes create welcome --input ./notes
 dotnet run --project Tatami.Cli -- notes rename welcome.md greeting --input ./notes
@@ -44,6 +45,8 @@ dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output 
 ```sh
 tatami preview [--output <dir>] [--config <file>]
 ```
+
+`notes validate` は出力先を書き換えずにノートのFront Matter、公開slug重複、公開本文の非公開ブロックを検査します。
 
 通常のコマンド結果は標準出力、診断は標準エラーへ出ます。`--quiet` は補助メッセージを抑制し、`--verbose` は一覧のタイトルなどを追加表示します。入力や出力の相対パスは作業ディレクトリ基準です。
 
