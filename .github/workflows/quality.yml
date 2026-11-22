@@ -22,6 +22,7 @@ jobs:
           dotnet restore Tests/Tatami.Tests.csproj
       - name: Verify formatting
         run: |
+          # Existing info-level suggestions are deferred while build warnings remain enforced.
           dotnet format Tatami.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015
           dotnet format Tatami.Cli/Tatami.Cli.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015
           dotnet format Tests/Tatami.Tests.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015

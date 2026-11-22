@@ -15,8 +15,7 @@ csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_using_directive_placement = outside_namespace
 
-# Keep established low-noise analyzer setting; other style rules stay at SDK defaults.
-dotnet_diagnostic.IDE0005.severity = warning
+# Analyzer severities stay at SDK defaults unless the team explicitly promotes a rule.
 
 # Preserve the existing line endings and encoding for these legacy files.
 [/Program.cs]
