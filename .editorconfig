@@ -1,10 +1,19 @@
 root = true
 
-[*.cs]
-dotnet_diagnostic.IDE0005.severity = warning
+[*.{cs,csx}]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
 
-# System名前空間を先頭に
+# C# formatting and analyzer defaults are shared by the SDK and dotnet format.
 dotnet_sort_system_directives_first = true
-
-# usingグループを分離しない
 dotnet_separate_import_directive_groups = false
+csharp_new_line_before_open_brace = all
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_using_directive_placement = outside_namespace
+
+# Keep established low-noise analyzer setting; other style rules stay at SDK defaults.
+dotnet_diagnostic.IDE0005.severity = warning

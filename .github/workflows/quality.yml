@@ -1,0 +1,32 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: |
+          dotnet restore Tatami.csproj
+          dotnet restore Tatami.Cli/Tatami.Cli.csproj
+          dotnet restore Tests/Tatami.Tests.csproj
+      - name: Verify formatting
+        run: |
+          dotnet format Tatami.csproj --no-restore --verify-no-changes --severity info
+          dotnet format Tatami.Cli/Tatami.Cli.csproj --no-restore --verify-no-changes --severity info
+          dotnet format Tests/Tatami.Tests.csproj --no-restore --verify-no-changes --severity info
+      - name: Build and test
+        run: |
+          dotnet build Tatami.csproj --no-restore
+          dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore
+          dotnet test Tests/Tatami.Tests.csproj --no-restore
