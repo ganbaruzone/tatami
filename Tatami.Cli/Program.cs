@@ -114,6 +114,39 @@ internal static class TatamiCli
                 Console.WriteLine(Path.GetRelativePath(root, restored));
                 return 0;
             }
+            if (positional.Count == 2 && positional[0] == "config" && positional[1] == "show")
+            {
+                var config = await ResolveConfigAsync(configPath);
+                Console.WriteLine(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            if (positional.Count == 4 && positional[0] == "config" && positional[1] == "set")
+            {
+                var config = await ResolveConfigAsync(configPath);
+                var key = positional[2];
+                var value = positional[3];
+                config = key switch
+                {
+                    "input" => config with { InputPath = value },
+                    "output" => config with { OutputPath = value },
+                    "builder" when value is "builtin" or "external" => config with { Builder = value },
+                    "external.project" => config with { External = config.External with { ProjectPath = value } },
+                    "external.executable" => config with { External = config.External with { Executable = value } },
+                    "external.arguments" => config with { External = config.External with { Arguments = JsonSerializer.Deserialize<string[]>(value) ?? [] } },
+                    "external.timeout" when int.TryParse(value, out var seconds) => config with { External = config.External with { TimeoutSeconds = seconds } },
+                    _ => null!
+                };
+                if (config is null) return UsageError($"不明または不正な設定項目です: {key}");
+                if (configPath is not null)
+                {
+                    var target = Path.GetFullPath(configPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    await config.SaveAsync(target);
+                }
+                else await new WorkspaceSettings().SaveAsync(config);
+                if (!_quiet) Console.WriteLine($"設定を更新しました: {key}");
+                return 0;
+            }
             if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
             {
                 var root = await ResolveInputAsync(input);
@@ -160,8 +193,7 @@ internal static class TatamiCli
         if (configPath is not null)
         {
             var fullPath = Path.GetFullPath(configPath);
-            if (!File.Exists(fullPath)) throw new FileNotFoundException($"設定ファイルがありません: {fullPath}");
-            return await SiteConfig.LoadAsync(fullPath);
+            return File.Exists(fullPath) ? await SiteConfig.LoadAsync(fullPath) : new SiteConfig("", "");
         }
         return await new WorkspaceSettings().LoadAsync() ?? new SiteConfig("", "");
     }
@@ -211,6 +243,8 @@ tatami {Version}
   tatami [--quiet|--verbose] notes trash <path> [--input <dir>]
   tatami [--quiet|--verbose] notes trash list [--input <dir>]
   tatami [--quiet|--verbose] notes restore <id> [--input <dir>]
+  tatami config show [--config <file>]
+  tatami config set <key> <value> [--config <file>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
@@ -221,6 +255,8 @@ notes create 非公開の新規ノートを作成します。
 notes rename ファイル名を変更します（既存ファイルは上書きしません）。
 notes trash  ノートをアプリ内ゴミ箱へ移動します。完全削除はしません。
 notes restore ゴミ箱のノートを元の場所へ復元します。
+config show   現在のビルド設定を表示します。
+config set    input / output / builder / external.* を設定します。
 build        設定済みビルダーでサイトを生成します。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。

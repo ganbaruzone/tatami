@@ -32,7 +32,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [x] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
 - [x] `tatami notes trash <path>`、`tatami notes trash list`、`tatami notes restore <id>`: アプリ内ゴミ箱へ移動し、一覧・復元する。OSのゴミ箱への完全削除は行わない。
-- [ ] `tatami config show|set`: メモのディレクトリ、HTML出力先、ビルダー設定を確認・変更する。設定ファイルは任意の `--config` で指定でき、省略時はユーザー設定を使う。
+- [x] `tatami config show|set`: メモのディレクトリ、HTML出力先、ビルダー設定を確認・変更する。設定ファイルは任意の `--config` で指定でき、省略時はユーザー設定を使う。
 - [ ] `tatami doctor`: .NET／設定／入力・出力パス／外部ビルダー実行ファイルとプロジェクトの基本診断を表示する。
 
 ### CLI共通仕様・完了条件
@@ -70,6 +70,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `notes trash` 実装記録（2026-11-22）
 
 `notes trash <path>` でTatamiのアプリ内ゴミ箱へ移動し、`notes trash list` でID・元パス・移動時刻を表示、`notes restore <id>` で元の場所へ復元します。完全削除コマンドは提供しません。
+
+### CLI `config` 実装記録（2026-11-22）
+
+`config show` は現在の設定をJSON表示し、`config set` は入力・出力パス、内蔵／外部ビルダー、外部プロジェクト・実行ファイル・引数・タイムアウトを変更します。`--config` で任意ファイルを選び、省略時は既存ユーザー設定を使います。
 - ビルド、ノート変更、設定変更、ゴミ箱、doctor、JSON出力は未実装。
 
 ### CLI `build` 実装記録（2026-11-22）
