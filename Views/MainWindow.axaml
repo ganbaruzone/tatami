@@ -136,6 +136,8 @@
                         <TextBlock Name="ProblemSummary" Grid.Column="1" Text="準備完了" Foreground="#848E9F" FontSize="11" Margin="16,0" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                             <Button Name="CancelBuildButton" Content="ビルドを中止" Click="CancelBuild" IsVisible="False" />
+                            <Button Name="ExternalDiffButton" Content="外部変更を確認" Click="ShowExternalDiff" IsVisible="False" />
+                            <Button Name="DiagnosticsButton" Content="エラー位置" Click="ShowDiagnostics" IsVisible="False" />
                             <Button Content="クリア" Click="ClearOutput" />
                         </StackPanel>
                     </Grid>

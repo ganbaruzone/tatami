@@ -13,12 +13,31 @@ public sealed class EditorBuffer
     private string _savedText;
     private string _savedHash;
     private bool _recoveredDirty;
-    private readonly Encoding _encoding;
+    private Encoding _encoding;
     public string Path { get; private set; }
     public string Text { get; set; }
     public bool IsDirty => _recoveredDirty || Text != _savedText;
     public string EncodingName => _encoding.WebName.ToUpperInvariant();
     public string SavedHash => _savedHash;
+
+    public async Task<(bool Exists, string Hash, string? Text)> ReadDiskSnapshotAsync()
+    {
+        if (!File.Exists(Path)) return (false, "", null);
+        PathSafety.RejectLinks(Path);
+        var bytes = await File.ReadAllBytesAsync(Path);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new StreamReader(stream, new UTF8Encoding(false, true), true);
+        return (true, Hash(bytes), await reader.ReadToEndAsync());
+    }
+
+    public async Task ReloadFromDiskAsync()
+    {
+        var opened = await OpenAsync(Path);
+        _savedText = Text = opened.Text;
+        _savedHash = opened._savedHash;
+        _encoding = opened._encoding;
+        _recoveredDirty = false;
+    }
 
     private EditorBuffer(string path, byte[] bytes, string text, Encoding encoding)
     { Path = path; _savedText = Text = text; _savedHash = Hash(bytes); _encoding = encoding; }

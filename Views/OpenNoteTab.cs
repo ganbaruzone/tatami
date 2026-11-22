@@ -17,4 +17,10 @@ internal sealed class OpenNoteTab
         Buffer = buffer;
         Document = new TextDocument(buffer.Text);
     }
+
+    public void ReloadDocument(string text)
+    {
+        Document.Text = text;
+        CaretOffset = 0;
+    }
 }
