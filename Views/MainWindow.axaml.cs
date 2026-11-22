@@ -154,6 +154,8 @@ public partial class MainWindow : Window
     private async Task RunAsync(Func<Task> action)
     {
         if (_busy) return;
+        // Resolve IME preedit before saving, changing tabs, or moving focus into another workflow.
+        Editor.TextArea.CommitPreedit();
         _busy = true;
         Toolbar.IsEnabled = FileTree.IsEnabled = RefreshButton.IsEnabled = OutputFolderButton.IsEnabled = BuilderSettingsButton.IsEnabled = NoteActions.IsEnabled = false;
         Editor.IsReadOnly = true;
