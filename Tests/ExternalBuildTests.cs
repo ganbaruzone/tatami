@@ -27,10 +27,13 @@ public sealed class ExternalBuildTests : IDisposable
 
     private SiteConfig Config(string mode = "success", int timeout = 30) => new(_notes, _output)
     {
-        Builder = "external", External = new ExternalBuildOptions
+        Builder = "external",
+        External = new ExternalBuildOptions
         {
-            ProjectPath = _project, Executable = "dotnet",
-            Arguments = [typeof(BuilderFixture.Marker).Assembly.Location, mode, "{output}"], TimeoutSeconds = timeout
+            ProjectPath = _project,
+            Executable = "dotnet",
+            Arguments = [typeof(BuilderFixture.Marker).Assembly.Location, mode, "{output}"],
+            TimeoutSeconds = timeout
         }
     };
 
@@ -38,7 +41,7 @@ public sealed class ExternalBuildTests : IDisposable
     public async Task RunsCommandExportsOnlyPublicTextAndPublishesAssets()
     {
         var lines = new List<string>();
-        var result = await new BuildCoordinator().BuildAsync(Config(), new InlineProgress(lines));
+        var result = await BuildCoordinator.BuildAsync(Config(), new InlineProgress(lines));
         Assert.Equal(1, result.PublishedCount);
         Assert.Equal(1, result.PrivateCount);
         var html = await File.ReadAllTextAsync(Path.Combine(_output, "index.html"));
@@ -57,19 +60,19 @@ public sealed class ExternalBuildTests : IDisposable
     [InlineData("empty")]
     public async Task FailedOrEmptyBuildPreservesOutput(string mode)
     {
-        await new BuildCoordinator().BuildAsync(Config());
+        await BuildCoordinator.BuildAsync(Config());
         var before = await File.ReadAllTextAsync(Path.Combine(_output, "index.html"));
-        if (mode == "empty") await Assert.ThrowsAsync<InvalidDataException>(() => new BuildCoordinator().BuildAsync(Config(mode)));
-        else await Assert.ThrowsAsync<IOException>(() => new BuildCoordinator().BuildAsync(Config(mode)));
+        if (mode == "empty") await Assert.ThrowsAsync<InvalidDataException>(() => BuildCoordinator.BuildAsync(Config(mode)));
+        else await Assert.ThrowsAsync<IOException>(() => BuildCoordinator.BuildAsync(Config(mode)));
         Assert.Equal(before, await File.ReadAllTextAsync(Path.Combine(_output, "index.html")));
     }
 
     [Fact]
     public async Task CanCancelAndTimeoutProcesses()
     {
-        await Assert.ThrowsAsync<TimeoutException>(() => new BuildCoordinator().BuildAsync(Config("wait", 1)));
+        await Assert.ThrowsAsync<TimeoutException>(() => BuildCoordinator.BuildAsync(Config("wait", 1)));
         using var cancel = new CancellationTokenSource(300);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new BuildCoordinator().BuildAsync(Config("wait"), cancellationToken: cancel.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => BuildCoordinator.BuildAsync(Config("wait"), cancellationToken: cancel.Token));
         Assert.False(Directory.Exists(_output));
     }
 
@@ -77,14 +80,14 @@ public sealed class ExternalBuildTests : IDisposable
     public async Task RejectsGeneratedSymlinks()
     {
         if (OperatingSystem.IsWindows()) return;
-        await Assert.ThrowsAnyAsync<IOException>(() => new BuildCoordinator().BuildAsync(Config("link")));
+        await Assert.ThrowsAnyAsync<IOException>(() => BuildCoordinator.BuildAsync(Config("link")));
         Assert.False(Directory.Exists(_output));
     }
 
     [Fact]
     public async Task LoopbackPreviewServesRootAssetsAndProtectsOtherFiles()
     {
-        await new BuildCoordinator().BuildAsync(Config());
+        await BuildCoordinator.BuildAsync(Config());
         await File.WriteAllTextAsync(Path.Combine(_output, "unowned.txt"), "SECRET");
         await using var server = new PreviewServer();
         await server.StartAsync(_output);

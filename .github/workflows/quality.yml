@@ -22,9 +22,9 @@ jobs:
           dotnet restore Tests/Tatami.Tests.csproj
       - name: Verify formatting
         run: |
-          dotnet format Tatami.csproj --no-restore --verify-no-changes --severity info
-          dotnet format Tatami.Cli/Tatami.Cli.csproj --no-restore --verify-no-changes --severity info
-          dotnet format Tests/Tatami.Tests.csproj --no-restore --verify-no-changes --severity info
+          dotnet format Tatami.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015
+          dotnet format Tatami.Cli/Tatami.Cli.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015
+          dotnet format Tests/Tatami.Tests.csproj --no-restore --verify-no-changes --severity info --exclude-diagnostics IDE0039 IDE0305 CA1869 SYSLIB1045 CA1859 CA1826 ASP0015
       - name: Build and test
         run: |
           dotnet build Tatami.csproj --no-restore

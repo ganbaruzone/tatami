@@ -2,7 +2,7 @@ root = true
 
 [*.{cs,csx}]
 charset = utf-8
-end_of_line = crlf
+end_of_line = lf
 insert_final_newline = true
 indent_style = space
 indent_size = 4
@@ -17,3 +17,15 @@ csharp_using_directive_placement = outside_namespace
 
 # Keep established low-noise analyzer setting; other style rules stay at SDK defaults.
 dotnet_diagnostic.IDE0005.severity = warning
+
+# Preserve the existing line endings and encoding for these legacy files.
+[/Program.cs]
+charset = utf-8-bom
+end_of_line = crlf
+
+[/ViewModels/MainViewModel.cs]
+end_of_line = crlf
+
+[/ViewModels/ViewModelBase.cs]
+charset = utf-8-bom
+end_of_line = crlf
