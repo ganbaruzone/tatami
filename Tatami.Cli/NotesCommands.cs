@@ -5,34 +5,48 @@ internal static partial class TatamiCli
 {
     private static async Task<int?> RunNotesCommandAsync(CliArguments arguments)
     {
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "create")
+        var positional = arguments.Positional;
+        var positionalCount = positional.Count;
+        var input = arguments.Input;
+        var directory = arguments.Directory;
+        var command = positionalCount > 1 ? positional[1] : null;
+        var isSupportedCommand = command switch
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var targetDirectory = arguments.Directory is null
+            "create" => positionalCount == 3,
+            "rename" => positionalCount == 4,
+            "metadata" => positionalCount == 6 && positional[2] == "set",
+            "trash" or "restore" or "show" or "search" => positionalCount == 3,
+            "list" or "validate" => positionalCount == 2,
+            _ => false
+        };
+        if (positionalCount == 0 || positional[0] != "notes" || !isSupportedCommand) return null;
+
+        var root = await ResolveInputAsync(input);
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "create")
+        {
+            var targetDirectory = directory is null
                 ? root
-                : Path.GetFullPath(Path.Combine(root, arguments.Directory));
-            var created = new NoteFileService(root).Create(targetDirectory, arguments.Positional[2]);
+                : Path.GetFullPath(Path.Combine(root, directory));
+            var created = new NoteFileService(root).Create(targetDirectory, positional[2]);
             Console.WriteLine(Path.GetRelativePath(root, created));
             return 0;
         }
-        if (arguments.Positional.Count == 4 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "rename")
+        if (positionalCount == 4 && positional[0] == "notes" && positional[1] == "rename")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var source = ResolveNotePath(root, arguments.Positional[2]);
-            var renamed = new NoteFileService(root).Rename(source, arguments.Positional[3]);
+            var source = ResolveNotePath(root, positional[2]);
+            var renamed = new NoteFileService(root).Rename(source, positional[3]);
             Console.WriteLine(Path.GetRelativePath(root, renamed));
             return 0;
         }
-        if (arguments.Positional.Count == 6 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "metadata" && arguments.Positional[2] == "set")
+        if (positionalCount == 6 && positional[0] == "notes" && positional[1] == "metadata" && positional[2] == "set")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var path = ResolveNotePath(root, arguments.Positional[3]);
-            if (!File.Exists(path) || !Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
-                return UsageError($"Markdownノートが見つかりません: {path}");
+            var path = ResolveNotePath(root, positional[3]);
+            var validationError = ValidateMarkdownNote(path);
+            if (validationError is not null) return validationError.Value;
             var current = await EditorBuffer.OpenAsync(path);
             var note = new NoteRepository().Parse(path, current.Text);
-            var key = arguments.Positional[4];
-            var value = arguments.Positional[5];
+            var key = positional[4];
+            var value = positional[5];
             string updated;
             switch (key)
             {
@@ -53,33 +67,29 @@ internal static partial class TatamiCli
             Console.WriteLine(Path.GetRelativePath(root, path));
             return 0;
         }
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "trash" && arguments.Positional[2] == "list")
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "trash" && positional[2] == "list")
         {
-            var root = await ResolveInputAsync(arguments.Input);
             var entries = new NoteFileService(root).ListTrash();
             foreach (var entry in entries)
                 Console.WriteLine($"{entry.Id}\t{entry.OriginalPath}\t{entry.TrashedAt:O}");
             if (!_quiet) Console.Error.WriteLine($"ゴミ箱: {entries.Count} 件");
             return 0;
         }
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "trash")
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "trash")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var source = ResolveNotePath(root, arguments.Positional[2]);
+            var source = ResolveNotePath(root, positional[2]);
             var entry = new NoteFileService(root).MoveToTrash(source);
             Console.WriteLine(entry.Id);
             return 0;
         }
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "restore")
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "restore")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var restored = new NoteFileService(root).Restore(arguments.Positional[2]);
+            var restored = new NoteFileService(root).Restore(positional[2]);
             Console.WriteLine(Path.GetRelativePath(root, restored));
             return 0;
         }
-        if (arguments.Positional.Count == 2 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "list")
+        if (positionalCount == 2 && positional[0] == "notes" && positional[1] == "list")
         {
-            var root = await ResolveInputAsync(arguments.Input);
             var notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output"))
                 .OrderBy(note => Path.GetRelativePath(root, note.SourcePath), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -92,9 +102,8 @@ internal static partial class TatamiCli
             if (!_quiet) Console.Error.WriteLine($"{notes.Length} 件のノート");
             return 0;
         }
-        if (arguments.Positional.Count == 2 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "validate")
+        if (positionalCount == 2 && positional[0] == "notes" && positional[1] == "validate")
         {
-            var root = await ResolveInputAsync(arguments.Input);
             var errors = new List<string>();
             var slugs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             Note[] notes;
@@ -130,15 +139,14 @@ internal static partial class TatamiCli
             Console.WriteLine($"検査成功: {notes.Length} 件（公開 {slugs.Count} 件）");
             return 0;
         }
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "show")
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "show")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var path = Path.GetFullPath(Path.Combine(root, arguments.Positional[2]));
+            var path = Path.GetFullPath(Path.Combine(root, positional[2]));
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (path == root || !path.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 return UsageError("ノートのパスは入力ディレクトリ内を指定してください。");
-            if (!File.Exists(path) || !Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
-                return UsageError($"Markdownノートが見つかりません: {path}");
+            var validationError = ValidateMarkdownNote(path);
+            if (validationError is not null) return validationError.Value;
             var note = new NoteRepository().Parse(path, await File.ReadAllTextAsync(path));
             Console.WriteLine($"path: {Path.GetRelativePath(root, path)}");
             Console.WriteLine($"publish: {(PublishFilter.IsPublic(note) ? "true (公開)" : "false (非公開)")}");
@@ -147,10 +155,9 @@ internal static partial class TatamiCli
             else Console.Write(note.FrontMatter);
             return 0;
         }
-        if (arguments.Positional.Count == 3 && arguments.Positional[0] == "notes" && arguments.Positional[1] == "search")
+        if (positionalCount == 3 && positional[0] == "notes" && positional[1] == "search")
         {
-            var root = await ResolveInputAsync(arguments.Input);
-            var query = arguments.Positional[2];
+            var query = positional[2];
             if (string.IsNullOrWhiteSpace(query)) return UsageError("検索語を指定してください。");
             var notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output"));
             var matches = 0;
@@ -188,5 +195,12 @@ internal static partial class TatamiCli
             return 0;
         }
         return null;
+    }
+
+    private static int? ValidateMarkdownNote(string path)
+    {
+        if (File.Exists(path) && Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
+            return null;
+        return UsageError($"Markdownノートが見つかりません: {path}");
     }
 }

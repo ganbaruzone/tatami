@@ -29,25 +29,28 @@ internal static partial class TatamiCli
 
         if (!CliArguments.TryParse(args, out var parsed, out var parseError))
             return UsageError(parseError!);
-        var positional = parsed!.Positional;
-        var input = parsed.Input;
-        var output = parsed.Output;
-        var configPath = parsed.ConfigPath;
-        var directory = parsed.Directory;
-        var json = parsed.Json;
-        var watch = parsed.Watch;
-        _quiet = parsed.Quiet;
-        _verbose = parsed.Verbose;
+        var cliArguments = parsed!;
+        var positional = cliArguments.Positional;
+        var positionalCount = positional.Count;
+        var isBuildCommand = positionalCount == 1 && positional[0] == "build";
+        var isPreviewCommand = positionalCount == 1 && positional[0] == "preview";
+        var input = cliArguments.Input;
+        var output = cliArguments.Output;
+        var configPath = cliArguments.ConfigPath;
+        var json = cliArguments.Json;
+        var watch = cliArguments.Watch;
+        _quiet = cliArguments.Quiet;
+        _verbose = cliArguments.Verbose;
 
         try
         {
-            var noteResult = await RunNotesCommandAsync(parsed!);
+            var noteResult = await RunNotesCommandAsync(cliArguments);
             if (noteResult.HasValue) return noteResult.Value;
 
-            var configResult = await RunConfigCommandAsync(parsed!);
+            var configResult = await RunConfigCommandAsync(cliArguments);
             if (configResult.HasValue) return configResult.Value;
 
-            if (positional.Count == 1 && positional[0] == "build")
+            if (isBuildCommand)
             {
                 if (watch && json) return UsageError("--watch と --json は同時に指定できません。");
                 var config = await ResolveConfigAsync(configPath);
@@ -67,7 +70,7 @@ internal static partial class TatamiCli
                     Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
                 return 0;
             }
-            if (positional.Count == 1 && positional[0] == "preview")
+            if (isPreviewCommand)
             {
                 var config = await ResolveConfigAsync(configPath);
                 var previewOutput = output is null ? config.OutputPath : Path.GetFullPath(output);
@@ -102,14 +105,14 @@ internal static partial class TatamiCli
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException or InvalidDataException or ArgumentException)
         {
-            if (json && positional.Count == 1 && positional[0] == "build")
+            if (json && isBuildCommand)
                 Console.WriteLine(JsonSerializer.Serialize(new { success = false, published = (int?)null, privateCount = (int?)null, output, error = ex.Message }));
             Console.Error.WriteLine($"エラー: {ex.Message}");
             return 2;
         }
         catch (Exception ex)
         {
-            if (json && positional.Count == 1 && positional[0] == "build")
+            if (json && isBuildCommand)
                 Console.WriteLine(JsonSerializer.Serialize(new { success = false, published = (int?)null, privateCount = (int?)null, output, error = ex.Message }));
             Console.Error.WriteLine($"エラー: {ex.Message}");
             return 1;
@@ -124,8 +127,7 @@ internal static partial class TatamiCli
 
     private static async Task<int> RunWatchBuildAsync(SiteConfig config)
     {
-        var inputRoot = Path.GetFullPath(config.InputPath);
-        if (!Directory.Exists(inputRoot)) throw new DirectoryNotFoundException($"入力ディレクトリがありません: {inputRoot}");
+        var inputRoot = RequireDirectory(config.InputPath, "入力ディレクトリがありません");
         var changes = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
         { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true, SingleWriter = false });
         using var watcher = new FileSystemWatcher(inputRoot, "*")
@@ -325,18 +327,21 @@ internal static partial class TatamiCli
     private static async Task<string> ResolveInputAsync(string? input)
     {
         if (!string.IsNullOrWhiteSpace(input))
-        {
-            var selected = Path.GetFullPath(input);
-            if (!Directory.Exists(selected)) throw new DirectoryNotFoundException($"入力ディレクトリがありません: {selected}");
-            return selected;
-        }
+            return RequireDirectory(input, "入力ディレクトリがありません");
+
         var config = await new WorkspaceSettings().LoadAsync();
         var configured = config?.InputPath;
         if (string.IsNullOrWhiteSpace(configured))
             throw new DirectoryNotFoundException("入力ディレクトリが未設定です。--input <dir> を指定してください。");
-        var full = Path.GetFullPath(configured);
-        if (!Directory.Exists(full)) throw new DirectoryNotFoundException($"設定された入力ディレクトリがありません: {full}");
-        return full;
+        return RequireDirectory(configured, "設定された入力ディレクトリがありません");
+    }
+
+    private static string RequireDirectory(string path, string errorMessage)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException($"{errorMessage}: {fullPath}");
+        return fullPath;
     }
 
     private static string ResolveNotePath(string root, string notePath)

@@ -5,20 +5,22 @@ internal static partial class TatamiCli
 {
     private static async Task<int?> RunConfigCommandAsync(CliArguments arguments)
     {
+        var positional = arguments.Positional;
+        var positionalCount = positional.Count;
         var configPath = arguments.ConfigPath;
-        if (arguments.Positional.Count == 2 && arguments.Positional[0] == "config" && arguments.Positional[1] == "show")
+        if (positionalCount == 2 && positional[0] == "config" && positional[1] == "show")
         {
             var config = await ResolveConfigAsync(configPath);
             Console.WriteLine(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
-        if (arguments.Positional.Count == 1 && arguments.Positional[0] == "doctor")
+        if (positionalCount == 1 && positional[0] == "doctor")
             return await RunDoctorAsync(configPath);
-        if (arguments.Positional.Count == 4 && arguments.Positional[0] == "config" && arguments.Positional[1] == "set")
+        if (positionalCount == 4 && positional[0] == "config" && positional[1] == "set")
         {
             var config = await ResolveConfigAsync(configPath);
-            var key = arguments.Positional[2];
-            var value = arguments.Positional[3];
+            var key = positional[2];
+            var value = positional[3];
             config = key switch
             {
                 "input" => config with { InputPath = value },
