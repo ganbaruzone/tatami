@@ -73,3 +73,6 @@ Desktop.ini
 # ========================================
 .env
 .env.*
+
+# Tatami generated site (use this output directory or add your own)
+/site-output/

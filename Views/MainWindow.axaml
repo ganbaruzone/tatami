@@ -17,7 +17,9 @@
         <vm:MainViewModel />
     </Design.DataContext>
     <StackPanel Background="Lavender">
-        <Button HorizontalAlignment="Center" Click="GetFiles">フォルダを選択</Button>
+        <Button Name="SelectFolderButton" HorizontalAlignment="Center" Click="GetFiles">フォルダを選択</Button>
+        <Button Name="BuildSiteButton" HorizontalAlignment="Center" Click="BuildSite">サイトをビルド</Button>
+        <TextBlock Name="BuildStatus" TextWrapping="Wrap" Margin="8" />
         <ListBox Name="Folder_Contents"
                  SelectionMode="Single"
                  SelectionChanged="File_Selected">

@@ -7,7 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
+    <Compile Remove="Tests/**/*.cs" />
+    <Content Include="Templates/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
@@ -22,6 +23,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Scriban" Version="7.6.1" />
     <PackageReference Include="Markdig" Version="1.6.0" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>

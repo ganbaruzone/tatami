@@ -1,0 +1,13 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.8; }
+body { margin: 0; }
+main { max-width: 52rem; margin: 3rem auto; padding: 0 1.5rem; overflow-wrap: anywhere; }
+h1, h2, h3 { line-height: 1.4; }
+a { color: #537cc5; }
+img { max-width: 100%; height: auto; }
+pre { overflow-x: auto; padding: 1rem; background: light-dark(#f4f4f4, #242424); }
+code { font-family: ui-monospace, monospace; }
+blockquote { margin-left: 0; padding-left: 1rem; border-left: 3px solid #888; }
+table { display: block; overflow-x: auto; border-collapse: collapse; }
+th, td { border: 1px solid #888; padding: .4rem .8rem; }
+time { color: #888; }
+.tags { display: flex; flex-wrap: wrap; gap: .8rem; list-style: none; padding: 0; font-size: .85rem; }
