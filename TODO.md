@@ -31,7 +31,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
 - [x] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
 - [x] `tatami notes rename <path> <name>`: `NoteFileService` を使い、同名衝突を防いで名前を変更する。
-- [ ] `tatami notes trash <path>`、`tatami notes trash list`、`tatami notes restore <id>`: アプリ内ゴミ箱へ移動し、一覧・復元する。OSのゴミ箱への完全削除は行わない。
+- [x] `tatami notes trash <path>`、`tatami notes trash list`、`tatami notes restore <id>`: アプリ内ゴミ箱へ移動し、一覧・復元する。OSのゴミ箱への完全削除は行わない。
 - [ ] `tatami config show|set`: メモのディレクトリ、HTML出力先、ビルダー設定を確認・変更する。設定ファイルは任意の `--config` で指定でき、省略時はユーザー設定を使う。
 - [ ] `tatami doctor`: .NET／設定／入力・出力パス／外部ビルダー実行ファイルとプロジェクトの基本診断を表示する。
 
@@ -66,6 +66,10 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### CLI `notes rename` 実装記録（2026-11-22）
 
 入力ワークスペース内のMarkdownを `NoteFileService` 経由で改名します。ワークスペース外の相対・絶対パスは拒否し、既存ファイルとの衝突は上書きせずエラーにします。
+
+### CLI `notes trash` 実装記録（2026-11-22）
+
+`notes trash <path>` でTatamiのアプリ内ゴミ箱へ移動し、`notes trash list` でID・元パス・移動時刻を表示、`notes restore <id>` で元の場所へ復元します。完全削除コマンドは提供しません。
 - ビルド、ノート変更、設定変更、ゴミ箱、doctor、JSON出力は未実装。
 
 ### CLI `build` 実装記録（2026-11-22）

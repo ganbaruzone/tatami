@@ -90,6 +90,30 @@ internal static class TatamiCli
                 Console.WriteLine(Path.GetRelativePath(root, renamed));
                 return 0;
             }
+            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "trash" && positional[2] == "list")
+            {
+                var root = await ResolveInputAsync(input);
+                var entries = new NoteFileService(root).ListTrash();
+                foreach (var entry in entries)
+                    Console.WriteLine($"{entry.Id}\t{entry.OriginalPath}\t{entry.TrashedAt:O}");
+                if (!_quiet) Console.Error.WriteLine($"ゴミ箱: {entries.Count} 件");
+                return 0;
+            }
+            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "trash")
+            {
+                var root = await ResolveInputAsync(input);
+                var source = ResolveNotePath(root, positional[2]);
+                var entry = new NoteFileService(root).MoveToTrash(source);
+                Console.WriteLine(entry.Id);
+                return 0;
+            }
+            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "restore")
+            {
+                var root = await ResolveInputAsync(input);
+                var restored = new NoteFileService(root).Restore(positional[2]);
+                Console.WriteLine(Path.GetRelativePath(root, restored));
+                return 0;
+            }
             if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
             {
                 var root = await ResolveInputAsync(input);
@@ -184,6 +208,9 @@ tatami {Version}
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
   tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
   tatami [--quiet|--verbose] notes rename <path> <name> [--input <dir>]
+  tatami [--quiet|--verbose] notes trash <path> [--input <dir>]
+  tatami [--quiet|--verbose] notes trash list [--input <dir>]
+  tatami [--quiet|--verbose] notes restore <id> [--input <dir>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
@@ -192,6 +219,8 @@ notes list   Markdownノートを再帰的に一覧表示します（公開状�
 notes show   Front Matterと公開判定を表示します。
 notes create 非公開の新規ノートを作成します。
 notes rename ファイル名を変更します（既存ファイルは上書きしません）。
+notes trash  ノートをアプリ内ゴミ箱へ移動します。完全削除はしません。
+notes restore ゴミ箱のノートを元の場所へ復元します。
 build        設定済みビルダーでサイトを生成します。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。

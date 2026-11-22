@@ -23,10 +23,13 @@ dotnet run --project Tatami.Cli -- notes list --input ./notes
 dotnet run --project Tatami.Cli -- notes show welcome.md --input ./notes
 dotnet run --project Tatami.Cli -- notes create welcome --input ./notes
 dotnet run --project Tatami.Cli -- notes rename welcome.md greeting --input ./notes
+dotnet run --project Tatami.Cli -- notes trash greeting.md --input ./notes
+dotnet run --project Tatami.Cli -- notes trash list --input ./notes
+dotnet run --project Tatami.Cli -- notes restore 00000000-0000-0000-0000-000000000000 --input ./notes
 dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output --json
 ```
 
-`notes list` は公開状態と相対パスを表示し、`notes show` はFront Matterと公開判定を表示します。`notes create` は `publish: false` の新規ノートを作成し、`--directory` で入力内の作成先を選べます。`notes rename` は入力内のノート名を変更し、同名ファイルを上書きしません。`build` は内蔵または設定済み外部ビルダーを使います。入力・出力の省略時は `--config <file>` またはアプリのユーザー設定を参照します。`--json` は件数・出力先・成否をJSONで出します。成功は終了コード0、実行時エラーは1、引数エラーは2です。ゴミ箱、設定変更、`doctor` は後続実装です。
+`notes list` は公開状態と相対パスを表示し、`notes show` はFront Matterと公開判定を表示します。`notes create` は `publish: false` の新規ノートを作成し、`--directory` で入力内の作成先を選べます。`notes rename` は入力内のノート名を変更し、同名ファイルを上書きしません。`notes trash <path>` はノートをTatamiの `.tatami-trash/` に移動します。`notes trash list` で一覧を表示し、表示されたIDを `notes restore <id>` に渡すと元の場所に戻せます。CLIからゴミ箱を完全削除する機能はありません。`build` は内蔵または設定済み外部ビルダーを使います。入力・出力の省略時は `--config <file>` またはアプリのユーザー設定を参照します。`--json` は件数・出力先・成否をJSONで出します。成功は終了コード0、実行時エラーは1、引数エラーは2です。設定変更と `doctor` は後続実装です。
 
 ## 使い方
 
