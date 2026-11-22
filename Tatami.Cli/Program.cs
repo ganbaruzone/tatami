@@ -1,5 +1,5 @@
-using System.Reflection;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
@@ -8,7 +8,7 @@ using Tatami.Services;
 
 return await TatamiCli.RunAsync(args);
 
-internal static class TatamiCli
+internal static partial class TatamiCli
 {
     private static readonly string Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
     private static bool _quiet;
@@ -27,41 +27,26 @@ internal static class TatamiCli
             return 0;
         }
 
-        _quiet = args.Contains("--quiet");
-        _verbose = args.Contains("--verbose");
-        if (_quiet && _verbose) return UsageError("--quiet と --verbose は同時に指定できません。");
-        var positional = new List<string>();
-        string? input = null;
-        string? output = null;
-        string? configPath = null;
-        string? directory = null;
-        var json = false;
-        var watch = false;
-        for (var i = 0; i < args.Length; i++)
-        {
-            if (args[i] is "--quiet" or "--verbose") continue;
-            if (args[i] == "--json") { json = true; continue; }
-            if (args[i] == "--watch") { watch = true; continue; }
-            if (args[i] is "--input" or "--output" or "--config" or "--directory")
-            {
-                var option = args[i];
-                if (++i >= args.Length || args[i].StartsWith("--", StringComparison.Ordinal))
-                    return UsageError($"{option} には値を指定してください。");
-                if (option == "--input") input = args[i];
-                else if (option == "--output") output = args[i];
-                else if (option == "--config") configPath = args[i];
-                else directory = args[i];
-                continue;
-            }
-            if (args[i].StartsWith('-')) return UsageError($"不明なオプションです: {args[i]}");
-            positional.Add(args[i]);
-        }
-
-        if (watch && !(positional.Count == 1 && positional[0] == "build"))
-            return UsageError("--watch は build コマンドでのみ使用できます。");
+        if (!CliArguments.TryParse(args, out var parsed, out var parseError))
+            return UsageError(parseError!);
+        var positional = parsed!.Positional;
+        var input = parsed.Input;
+        var output = parsed.Output;
+        var configPath = parsed.ConfigPath;
+        var directory = parsed.Directory;
+        var json = parsed.Json;
+        var watch = parsed.Watch;
+        _quiet = parsed.Quiet;
+        _verbose = parsed.Verbose;
 
         try
         {
+            var noteResult = await RunNotesCommandAsync(parsed!);
+            if (noteResult.HasValue) return noteResult.Value;
+
+            var configResult = await RunConfigCommandAsync(parsed!);
+            if (configResult.HasValue) return configResult.Value;
+
             if (positional.Count == 1 && positional[0] == "build")
             {
                 if (watch && json) return UsageError("--watch と --json は同時に指定できません。");
@@ -111,223 +96,6 @@ internal static class TatamiCli
                     catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
                 }
                 finally { Console.CancelKeyPress -= cancel; }
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "create")
-            {
-                var root = await ResolveInputAsync(input);
-                var targetDirectory = directory is null
-                    ? root
-                    : Path.GetFullPath(Path.Combine(root, directory));
-                var created = new NoteFileService(root).Create(targetDirectory, positional[2]);
-                Console.WriteLine(Path.GetRelativePath(root, created));
-                return 0;
-            }
-            if (positional.Count == 4 && positional[0] == "notes" && positional[1] == "rename")
-            {
-                var root = await ResolveInputAsync(input);
-                var source = ResolveNotePath(root, positional[2]);
-                var renamed = new NoteFileService(root).Rename(source, positional[3]);
-                Console.WriteLine(Path.GetRelativePath(root, renamed));
-                return 0;
-            }
-            if (positional.Count == 6 && positional[0] == "notes" && positional[1] == "metadata" && positional[2] == "set")
-            {
-                var root = await ResolveInputAsync(input);
-                var path = ResolveNotePath(root, positional[3]);
-                if (!File.Exists(path) || !Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
-                    return UsageError($"Markdownノートが見つかりません: {path}");
-                var current = await EditorBuffer.OpenAsync(path);
-                var note = new NoteRepository().Parse(path, current.Text);
-                var key = positional[4];
-                var value = positional[5];
-                string updated;
-                switch (key)
-                {
-                    case "title":
-                        updated = NoteMetadataEditor.Apply(current.Text, value, note.Metadata.Publish, note.Metadata.Slug);
-                        break;
-                    case "publish" when bool.TryParse(value, out var publish):
-                        updated = NoteMetadataEditor.Apply(current.Text, note.Metadata.Title, publish, note.Metadata.Slug);
-                        break;
-                    case "slug":
-                        updated = NoteMetadataEditor.Apply(current.Text, note.Metadata.Title, note.Metadata.Publish, value);
-                        break;
-                    default:
-                        return UsageError("metadata key は title / publish / slug、publish value は true / false を指定してください。");
-                }
-                current.Text = updated;
-                await current.SaveAsync();
-                Console.WriteLine(Path.GetRelativePath(root, path));
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "trash" && positional[2] == "list")
-            {
-                var root = await ResolveInputAsync(input);
-                var entries = new NoteFileService(root).ListTrash();
-                foreach (var entry in entries)
-                    Console.WriteLine($"{entry.Id}\t{entry.OriginalPath}\t{entry.TrashedAt:O}");
-                if (!_quiet) Console.Error.WriteLine($"ゴミ箱: {entries.Count} 件");
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "trash")
-            {
-                var root = await ResolveInputAsync(input);
-                var source = ResolveNotePath(root, positional[2]);
-                var entry = new NoteFileService(root).MoveToTrash(source);
-                Console.WriteLine(entry.Id);
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "restore")
-            {
-                var root = await ResolveInputAsync(input);
-                var restored = new NoteFileService(root).Restore(positional[2]);
-                Console.WriteLine(Path.GetRelativePath(root, restored));
-                return 0;
-            }
-            if (positional.Count == 2 && positional[0] == "config" && positional[1] == "show")
-            {
-                var config = await ResolveConfigAsync(configPath);
-                Console.WriteLine(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
-                return 0;
-            }
-            if (positional.Count == 1 && positional[0] == "doctor")
-                return await RunDoctorAsync(configPath);
-            if (positional.Count == 4 && positional[0] == "config" && positional[1] == "set")
-            {
-                var config = await ResolveConfigAsync(configPath);
-                var key = positional[2];
-                var value = positional[3];
-                config = key switch
-                {
-                    "input" => config with { InputPath = value },
-                    "output" => config with { OutputPath = value },
-                    "builder" when value is "builtin" or "external" => config with { Builder = value },
-                    "external.project" => config with { External = config.External with { ProjectPath = value } },
-                    "external.executable" => config with { External = config.External with { Executable = value } },
-                    "external.arguments" => config with { External = config.External with { Arguments = JsonSerializer.Deserialize<string[]>(value) ?? [] } },
-                    "external.timeout" when int.TryParse(value, out var seconds) => config with { External = config.External with { TimeoutSeconds = seconds } },
-                    _ => null!
-                };
-                if (config is null) return UsageError($"不明または不正な設定項目です: {key}");
-                if (configPath is not null)
-                {
-                    var target = Path.GetFullPath(configPath);
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    await config.SaveAsync(target);
-                }
-                else await new WorkspaceSettings().SaveAsync(config);
-                if (!_quiet) Console.WriteLine($"設定を更新しました: {key}");
-                return 0;
-            }
-            if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
-            {
-                var root = await ResolveInputAsync(input);
-                var notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output"))
-                    .OrderBy(note => Path.GetRelativePath(root, note.SourcePath), StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                foreach (var note in notes)
-                {
-                    var relative = Path.GetRelativePath(root, note.SourcePath);
-                    Console.WriteLine($"{(PublishFilter.IsPublic(note) ? "公開" : "非公開")}\t{relative}");
-                    if (_verbose && note.Metadata.Title is { Length: > 0 } title) Console.Error.WriteLine($"  title: {title}");
-                }
-                if (!_quiet) Console.Error.WriteLine($"{notes.Length} 件のノート");
-                return 0;
-            }
-            if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "validate")
-            {
-                var root = await ResolveInputAsync(input);
-                var errors = new List<string>();
-                var slugs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                Note[] notes;
-                try { notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output")).ToArray(); }
-                catch (InvalidDataException ex)
-                {
-                    Console.Error.WriteLine($"NG\t{ex.Message}");
-                    return 1;
-                }
-                foreach (var note in notes)
-                {
-                    if (!PublishFilter.IsPublic(note)) continue;
-                    var relative = Path.GetRelativePath(root, note.SourcePath);
-                    try
-                    {
-                        var slug = note.Metadata.Slug is null
-                            ? GetFileSlug(Path.GetFileNameWithoutExtension(note.SourcePath))
-                            : GetSlug(note.Metadata.Slug);
-                        if (slugs.TryGetValue(slug, out var previous))
-                            errors.Add($"{relative}: slug '{slug}' が {previous} と重複しています。");
-                        else slugs.Add(slug, relative);
-                        _ = PrivateContentFilter.Remove(note.Markdown);
-                    }
-                    catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
-                    { errors.Add($"{relative}: {ex.Message}"); }
-                }
-                if (errors.Count > 0)
-                {
-                    foreach (var error in errors) Console.Error.WriteLine($"NG\t{error}");
-                    Console.Error.WriteLine($"検査失敗: {errors.Count} 件");
-                    return 1;
-                }
-                Console.WriteLine($"検査成功: {notes.Length} 件（公開 {slugs.Count} 件）");
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "show")
-            {
-                var root = await ResolveInputAsync(input);
-                var path = Path.GetFullPath(Path.Combine(root, positional[2]));
-                var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                if (path == root || !path.StartsWith(root + Path.DirectorySeparatorChar, comparison))
-                    return UsageError("ノートのパスは入力ディレクトリ内を指定してください。");
-                if (!File.Exists(path) || !Path.GetExtension(path).Equals(".md", StringComparison.OrdinalIgnoreCase))
-                    return UsageError($"Markdownノートが見つかりません: {path}");
-                var note = new NoteRepository().Parse(path, await File.ReadAllTextAsync(path));
-                Console.WriteLine($"path: {Path.GetRelativePath(root, path)}");
-                Console.WriteLine($"publish: {(PublishFilter.IsPublic(note) ? "true (公開)" : "false (非公開)")}");
-                Console.WriteLine("front matter:");
-                if (note.FrontMatter is null) Console.WriteLine("  (なし)");
-                else Console.Write(note.FrontMatter);
-                return 0;
-            }
-            if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "search")
-            {
-                var root = await ResolveInputAsync(input);
-                var query = positional[2];
-                if (string.IsNullOrWhiteSpace(query)) return UsageError("検索語を指定してください。");
-                var notes = new NoteRepository().ReadAll(root, Path.Combine(root, ".tatami-no-output"));
-                var matches = 0;
-                foreach (var note in notes)
-                {
-                    var relative = Path.GetRelativePath(root, note.SourcePath);
-                    var metadataLine = note.FrontMatter is null ? 1 : 2;
-                    if (Path.GetFileNameWithoutExtension(note.SourcePath).Contains(query, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"{relative}: ファイル名一致");
-                        matches++;
-                    }
-                    if (note.Metadata.Title?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
-                    {
-                        Console.WriteLine($"{relative}:{metadataLine}: title: {note.Metadata.Title}");
-                        matches++;
-                    }
-                    foreach (var tag in note.Metadata.Tags ?? [])
-                    {
-                        if (!tag.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                        Console.WriteLine($"{relative}:{metadataLine}: tag: {tag}");
-                        matches++;
-                    }
-                    var bodyLineOffset = note.FrontMatter?.Count(character => character == '\n') + (note.FrontMatter is null ? 0 : 2) ?? 0;
-                    var lines = note.Markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-                    for (var line = 0; line < lines.Length; line++)
-                    {
-                        if (!lines[line].Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                        Console.WriteLine($"{relative}:{bodyLineOffset + line + 1}: {lines[line].Trim()}");
-                        matches++;
-                    }
-                }
-                if (matches == 0) Console.WriteLine("一致するノートはありません。");
-                else if (!_quiet) Console.Error.WriteLine($"{matches} 件の一致");
                 return 0;
             }
             return UsageError("未対応のコマンドです。`tatami --help` を参照してください。");

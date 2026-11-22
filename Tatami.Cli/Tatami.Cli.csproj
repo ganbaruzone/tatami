@@ -10,6 +10,9 @@
   <ItemGroup>
     <ProjectReference Include="../Tatami.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tatami.Tests" />
+  </ItemGroup>
   <Target Name="CreateTatamiCommandName" AfterTargets="Publish" Condition="Exists('$(PublishDir)$(AssemblyName)')">
     <Copy SourceFiles="$(PublishDir)$(AssemblyName)" DestinationFiles="$(PublishDir)tatami" />
   </Target>
