@@ -32,6 +32,10 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _buildCancellation;
     private readonly PreviewServer _previewServer = new();
     private SiteConfig CurrentConfig => new(_notesPath ?? "", _outputPath ?? "") { Builder = _builder, External = _external };
+    private readonly List<OpenNoteTab> _tabs = [];
+    private readonly Dictionary<OpenNoteTab, TextBlock> _tabLabels = [];
+    private readonly Dictionary<OpenNoteTab, Border> _tabBorders = [];
+    private OpenNoteTab? _activeTab;
     private EditorBuffer? _buffer;
     private WorkspaceEntry? _selected;
     private bool _busy;
@@ -91,9 +95,51 @@ public partial class MainWindow : Window
         MetadataPanel.IsEnabled = !_busy && _buffer != null;
         ApplyMetadataButton.IsEnabled = !_busy && _buffer != null && _metadataPending;
         RenameNoteButton.IsEnabled = TrashNoteButton.IsEnabled = !_busy && _buffer != null;
-        BufferTab.Text = _buffer == null ? "ようこそ" : $"M↓  {Path.GetFileName(_buffer.Path)}{(dirty ? "  ●" : "")}";
         Title = _buffer == null ? "Tatami" : $"{(dirty ? "● " : "")}{Path.GetFileName(_buffer.Path)} — Tatami";
         if (_buffer != null) EncodingStatus.Text = $"{_buffer.EncodingName}   Markdown";
+        UpdateTabLabels();
+    }
+
+    private void RefreshTabStrip()
+    {
+        TabStrip.Children.Clear();
+        _tabLabels.Clear();
+        _tabBorders.Clear();
+        foreach (var tab in _tabs)
+        {
+            var label = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var select = new Button { Content = label, Padding = new Thickness(12, 6), Background = Brushes.Transparent };
+            if (_notesPath != null) ToolTip.SetTip(select, Path.GetRelativePath(_notesPath, tab.Path));
+            select.Click += async (_, _) => await RunAsync(() => ActivateTabAsync(tab));
+            var close = new Button { Content = "×", Padding = new Thickness(7, 4), MinWidth = 28, Background = Brushes.Transparent };
+            ToolTip.SetTip(close, "タブを閉じる");
+            close.Click += async (_, _) => await RunAsync(() => CloseTabAsync(tab));
+            var item = new Border
+            {
+                BorderBrush = new SolidColorBrush(Color.Parse(tab == _activeTab ? "#82C6AF" : "#30333B")),
+                BorderThickness = new Thickness(0, 2, 0, 0),
+                Background = new SolidColorBrush(Color.Parse(tab == _activeTab ? "#181A1F" : "#202229")),
+                Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { select, close } }
+            };
+            TabStrip.Children.Add(item);
+            _tabLabels[tab] = label;
+            _tabBorders[tab] = item;
+        }
+        UpdateTabLabels();
+    }
+
+    private void UpdateTabLabels()
+    {
+        foreach (var tab in _tabs)
+        {
+            if (_tabLabels.TryGetValue(tab, out var label))
+                label.Text = $"{Path.GetFileName(tab.Path)}{(tab.IsDirty || (tab == _activeTab && _metadataPending) ? "  ●" : "")}";
+            if (_tabBorders.TryGetValue(tab, out var border))
+            {
+                border.BorderBrush = new SolidColorBrush(Color.Parse(tab == _activeTab ? "#82C6AF" : "#30333B"));
+                border.Background = new SolidColorBrush(Color.Parse(tab == _activeTab ? "#181A1F" : "#202229"));
+            }
+        }
     }
 
     private void MetadataSettingChanged(object? sender, EventArgs e)
@@ -179,9 +225,49 @@ public partial class MainWindow : Window
         Log($"保存しました: {_buffer.Path}");
     }
 
+    private async Task SaveAllOpenTabsAsync()
+    {
+        ApplyMetadataSettings();
+        var dirty = _tabs.Where(tab => tab.IsDirty).ToArray();
+        foreach (var tab in dirty) await tab.Buffer.SaveAsync();
+        UpdateBufferStatus();
+        if (dirty.Length > 0) Log($"開いているノートを {dirty.Length} 件保存しました。");
+    }
+
     private async Task<bool> ConfirmUnsavedAsync()
     {
-        if (_buffer?.IsDirty != true && !_metadataPending) return true;
+        ApplyMetadataSettings();
+        var dirty = _tabs.Where(tab => tab.IsDirty).ToArray();
+        if (dirty.Length == 0) return true;
+        var choice = await AskUnsavedChoiceAsync(dirty.Length == 1
+            ? $"{Path.GetFileName(dirty[0].Path)} に未保存の変更があります。"
+            : $"{dirty.Length} 個のノートに未保存の変更があります。");
+        if (choice == "save")
+        {
+            foreach (var tab in dirty) await tab.Buffer.SaveAsync();
+            UpdateBufferStatus();
+            Log($"{dirty.Length} 個のノートを保存しました。");
+            return true;
+        }
+        return choice == "discard";
+    }
+
+    private async Task<bool> ConfirmTabUnsavedAsync(OpenNoteTab tab)
+    {
+        if (tab == _activeTab) ApplyMetadataSettings();
+        if (!tab.IsDirty) return true;
+        var choice = await AskUnsavedChoiceAsync($"{Path.GetFileName(tab.Path)} に未保存の変更があります。");
+        if (choice == "save")
+        {
+            await tab.Buffer.SaveAsync();
+            UpdateBufferStatus();
+            return true;
+        }
+        return choice == "discard";
+    }
+
+    private async Task<string?> AskUnsavedChoiceAsync(string message)
+    {
         var dialog = new Window
         {
             Title = "未保存の変更",
@@ -203,14 +289,12 @@ public partial class MainWindow : Window
             Spacing = 20,
             Children =
             {
-                new TextBlock { Text = $"{(_buffer is null ? "ノート" : Path.GetFileName(_buffer.Path))} の変更を保存しますか？", TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"{message} 保存して続行しますか？", TextWrapping = TextWrapping.Wrap },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
                     Children = { cancel, discard, save } }
             }
         };
-        var choice = await dialog.ShowDialog<string?>(this);
-        if (choice == "save") { await SaveCurrentAsync(); return true; }
-        return choice == "discard";
+        return await dialog.ShowDialog<string?>(this);
     }
 
     private async Task<bool> SelectNotesFolderAsync()
@@ -230,8 +314,11 @@ public partial class MainWindow : Window
         _ = new NoteFileService(path);
         var entries = await Task.Run(() => WorkspaceEntry.Read(path));
         _notesPath = path;
+        _tabs.Clear();
+        _activeTab = null;
         _buffer = null;
         _metadataPending = false;
+        RefreshTabStrip();
         _selected = null;
         _changingSelection = true;
         try { FileTree.ItemsSource = entries; FileTree.SelectedItem = null; }
@@ -275,11 +362,7 @@ public partial class MainWindow : Window
             var opened = false;
             try
             {
-                // Read the target first: a read error must not discard the previous buffer.
-                var next = await EditorBuffer.OpenAsync(entry.FullPath);
-                if (!await ConfirmUnsavedAsync()) return;
-                ShowBuffer(next);
-                _selected = entry;
+                await OpenTabAsync(entry.FullPath);
                 Log($"開きました: {entry.Name}");
                 UpdateBufferStatus();
                 opened = true;
@@ -297,20 +380,63 @@ public partial class MainWindow : Window
         Editor.TextArea.Focus();
     }
 
-    private void ShowBuffer(EditorBuffer? buffer)
+    private async Task OpenTabAsync(string path)
     {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var tab = _tabs.FirstOrDefault(item => item.Path.Equals(path, comparison));
+        if (tab == null)
+        {
+            // Read the target first: a read error must not affect any open tab.
+            tab = new OpenNoteTab(await EditorBuffer.OpenAsync(path));
+            _tabs.Add(tab);
+        }
+        await ActivateTabAsync(tab);
+    }
+
+    private async Task ActivateTabAsync(OpenNoteTab tab)
+    {
+        if (tab == _activeTab) return;
+        ApplyMetadataSettings();
+        if (_activeTab != null) _activeTab.CaretOffset = Editor.TextArea.Caret.Offset;
+        _activeTab = tab;
+        _buffer = tab.Buffer;
         _metadataPending = false;
-        _buffer = buffer;
-        Editor.Text = buffer?.Text ?? "";
-        LoadMetadataSettings(Editor.Text);
-        Editor.Document.UndoStack.ClearAll();
-        Editor.TextArea.Caret.Offset = 0;
+        Editor.Document = tab.Document;
+        _buffer.Text = tab.Document.Text;
+        Editor.TextArea.Caret.Offset = Math.Clamp(tab.CaretOffset, 0, tab.Document.TextLength);
+        LoadMetadataSettings(tab.Document.Text);
         EditingPane.IsVisible = true;
         PreviewPane.IsVisible = false;
-        Editor.IsVisible = buffer != null;
-        Welcome.IsVisible = buffer == null;
-        Breadcrumb.Text = buffer == null ? "Tatami / Markdown editor" : Path.GetRelativePath(_notesPath!, buffer.Path);
+        Editor.IsVisible = true;
+        Welcome.IsVisible = false;
+        Breadcrumb.Text = Path.GetRelativePath(_notesPath!, tab.Path);
+        RefreshTabStrip();
         UpdateBufferStatus();
+        if (_notesPath != null) await ReloadNotesAsync(tab.Path);
+    }
+
+    private async Task CloseTabAsync(OpenNoteTab tab)
+    {
+        if (!await ConfirmTabUnsavedAsync(tab)) return;
+        var index = _tabs.IndexOf(tab);
+        var wasActive = tab == _activeTab;
+        _tabs.Remove(tab);
+        if (wasActive)
+        {
+            _activeTab = null;
+            _buffer = null;
+            _metadataPending = false;
+            if (_tabs.Count > 0) await ActivateTabAsync(_tabs[Math.Min(index, _tabs.Count - 1)]);
+            else
+            {
+                Editor.IsVisible = false;
+                Welcome.IsVisible = true;
+                Breadcrumb.Text = "Tatami / Markdown editor";
+            }
+        }
+        RefreshTabStrip();
+        UpdateBufferStatus();
+        if (_notesPath != null) await ReloadNotesAsync(_activeTab?.Path);
     }
 
     private async Task ReloadNotesAsync(string? selectedPath)
@@ -339,11 +465,9 @@ public partial class MainWindow : Window
             ? entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath)!
             : _notesPath!;
         var name = await NoteDialogs.Name("新規Markdownノート", "無題.md", directory).ShowDialog<string?>(this);
-        if (name == null || !await ConfirmUnsavedAsync()) return;
+        if (name == null) return;
         var path = await Task.Run(() => new NoteFileService(_notesPath!).Create(directory, name));
-        var buffer = await EditorBuffer.OpenAsync(path);
-        ShowBuffer(buffer);
-        await ReloadNotesAsync(path);
+        await OpenTabAsync(path);
         Editor.TextArea.Focus();
         Log($"新規ノートを作成しました（非公開）: {path}");
     }
@@ -365,12 +489,25 @@ public partial class MainWindow : Window
 
     private async void TrashNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
-        if (_buffer == null || _notesPath == null) return;
-        var name = Path.GetFileName(_buffer.Path);
-        if (!await NoteDialogs.Trash(name).ShowDialog<bool>(this) || !await ConfirmUnsavedAsync()) return;
-        await Task.Run(() => new NoteFileService(_notesPath).MoveToTrash(_buffer.Path));
-        ShowBuffer(null);
-        await ReloadNotesAsync(null);
+        if (_activeTab == null || _notesPath == null) return;
+        var tab = _activeTab;
+        var name = Path.GetFileName(tab.Path);
+        if (!await NoteDialogs.Trash(name).ShowDialog<bool>(this) || !await ConfirmTabUnsavedAsync(tab)) return;
+        await Task.Run(() => new NoteFileService(_notesPath).MoveToTrash(tab.Path));
+        _tabs.Remove(tab);
+        _activeTab = null;
+        _buffer = null;
+        _metadataPending = false;
+        if (_tabs.Count > 0) await ActivateTabAsync(_tabs[^1]);
+        else
+        {
+            Editor.IsVisible = false;
+            Welcome.IsVisible = true;
+            Breadcrumb.Text = "Tatami / Markdown editor";
+        }
+        RefreshTabStrip();
+        UpdateBufferStatus();
+        await ReloadNotesAsync(_activeTab?.Path);
         Log($"Tatamiのゴミ箱へ移動しました: {name}。公開済みHTMLへの反映には再ビルドしてください。");
     });
 
@@ -380,10 +517,9 @@ public partial class MainWindow : Window
         var service = new NoteFileService(_notesPath);
         var entries = await Task.Run(service.ListTrash);
         var id = await NoteDialogs.Restore(entries).ShowDialog<string?>(this);
-        if (id == null || !await ConfirmUnsavedAsync()) return;
+        if (id == null) return;
         var path = await Task.Run(() => service.Restore(id));
-        ShowBuffer(await EditorBuffer.OpenAsync(path));
-        await ReloadNotesAsync(path);
+        await OpenTabAsync(path);
         Editor.TextArea.Focus();
         Log($"復元しました: {path}");
     });
@@ -392,8 +528,8 @@ public partial class MainWindow : Window
     {
         if (_notesPath == null && !await SelectNotesFolderAsync()) return;
         if (_outputPath == null && !await ChooseOutputFolderAsync()) return;
-        // Build exactly what is visible in the editor, never silently use an older on-disk version.
-        await SaveCurrentAsync();
+        // Persist every edited open buffer so the build uses the current text from all tabs.
+        await SaveAllOpenTabsAsync();
         StatusText.Text = "サイトをビルドしています…";
         ProblemSummary.Text = "ビルド中";
         _buildCancellation = new CancellationTokenSource();
@@ -573,7 +709,7 @@ public partial class MainWindow : Window
     {
         if (_allowClose) return;
         if (_busy) { e.Cancel = true; return; }
-        if (_buffer?.IsDirty != true && !_metadataPending) return;
+        if (!_tabs.Any(tab => tab.IsDirty) && !_metadataPending) return;
         e.Cancel = true;
         var close = false;
         await RunAsync(async () => close = await ConfirmUnsavedAsync());

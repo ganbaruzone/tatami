@@ -95,9 +95,9 @@
                 </Grid.RowDefinitions>
                 <Grid Name="EditingPane" RowDefinitions="38,Auto,30,*" Background="#181A1F">
                     <Border Background="#202229" BorderBrush="#30333B" BorderThickness="0,0,0,1">
-                        <Border Background="#181A1F" BorderBrush="#82C6AF" BorderThickness="0,2,0,0" HorizontalAlignment="Left" MinWidth="180" Padding="16,0">
-                            <TextBlock Name="BufferTab" Text="ようこそ" VerticalAlignment="Center" FontSize="12" />
-                        </Border>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <StackPanel Name="TabStrip" Orientation="Horizontal" />
+                        </ScrollViewer>
                     </Border>
                     <Grid Name="MetadataPanel" Grid.Row="1" ColumnDefinitions="Auto,*,*,Auto" Margin="12,5" ColumnSpacing="8">
                         <CheckBox Name="MetadataPublish" Content="公開" VerticalAlignment="Center" ToolTip.Tip="チェックするとビルド対象になります" />
