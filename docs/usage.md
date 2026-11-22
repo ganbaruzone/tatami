@@ -227,6 +227,7 @@ CLIはGUIを開かず、ノート確認・変更とサイトビルドを実行�
 dotnet run --project Tatami.Cli -- --help
 dotnet run --project Tatami.Cli -- notes list --input ./notes
 dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output --json
+dotnet run --project Tatami.Cli -- preview --output ./site-output
 ```
 
 `tatami` 実行ファイルを発行するには、プロジェクトルートで次を実行します。
@@ -242,6 +243,7 @@ dotnet publish Tatami.Cli/Tatami.Cli.csproj -c Release -o ./artifacts/tatami
 | --- | --- |
 | `tatami --help` / `--version` | ヘルプ・バージョン |
 | `tatami build` | 内蔵または設定済み外部ビルダーで生成。`--input`、`--output`、`--config`、`--json` に対応 |
+| `tatami preview` | 生成済みHTMLを127.0.0.1で配信し、Ctrl+Cで終了。`--output` または設定済み出力先を使用 |
 | `tatami notes list` / `show <path>` | ノート一覧・Front Matterと公開判定 |
 | `tatami notes create <name>` | 非公開ノート作成。`--directory` で作成先を指定 |
 | `tatami notes rename <path> <name>` | ノート名変更 |

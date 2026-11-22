@@ -73,6 +73,37 @@ internal static class TatamiCli
                     Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
                 return 0;
             }
+            if (positional.Count == 1 && positional[0] == "preview")
+            {
+                var config = await ResolveConfigAsync(configPath);
+                var previewOutput = output is null ? config.OutputPath : Path.GetFullPath(output);
+                if (string.IsNullOrWhiteSpace(previewOutput))
+                    return UsageError("HTML出力ディレクトリが必要です。--output または --config を指定してください。");
+                previewOutput = Path.GetFullPath(previewOutput);
+                var pages = await PreviewCatalog.ReadAsync(previewOutput);
+                if (pages.Count == 0)
+                    throw new InvalidDataException($"プレビュー可能なHTMLがありません。先に tatami build を実行してください: {previewOutput}");
+
+                await using var server = new PreviewServer();
+                await server.StartAsync(previewOutput);
+                var address = server.GetUri(pages[0].FullPath);
+                using var stop = new CancellationTokenSource();
+                ConsoleCancelEventHandler cancel = (_, eventArgs) =>
+                {
+                    eventArgs.Cancel = true;
+                    stop.Cancel();
+                };
+                Console.CancelKeyPress += cancel;
+                try
+                {
+                    Console.WriteLine(address);
+                    if (!_quiet) Console.Error.WriteLine("ローカルプレビューを起動しました。終了するには Ctrl+C を押してください。");
+                    try { await Task.Delay(Timeout.InfiniteTimeSpan, stop.Token); }
+                    catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+                }
+                finally { Console.CancelKeyPress -= cancel; }
+                return 0;
+            }
             if (positional.Count == 3 && positional[0] == "notes" && positional[1] == "create")
             {
                 var root = await ResolveInputAsync(input);
@@ -389,6 +420,7 @@ tatami {Version}
   tatami config set <key> <value> [--config <file>]
   tatami doctor [--config <file>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
+  tatami [--quiet|--verbose] preview [--output <dir>] [--config <file>]
   tatami --help
   tatami --version
 
@@ -402,6 +434,7 @@ config show   現在のビルド設定を表示します。
 config set    input / output / builder / external.* を設定します。
 doctor        .NET・設定・パス・外部ビルダーを診断します。
 build        設定済みビルダーでサイトを生成します。
+preview      生成済みHTMLを127.0.0.1で配信します（Ctrl+Cで終了）。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。
 --config     設定JSONのパス（省略時はアプリ設定を使用）。
