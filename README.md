@@ -15,7 +15,14 @@ dotnet run --project Tatami.csproj
 
 ## CLI（初期版）
 
-Avaloniaの画面を起動せずにノートを確認できます。リポジトリのルートで `--project Tatami.Cli` を指定します。
+Avaloniaの画面を起動せずにノートを確認できます。SDKがある場合はリポジトリのルートで `dotnet run --project Tatami.Cli -- ...` を使えます。単体の `tatami` コマンドを作るには次のように発行し、生成した `tatami` 実行ファイルをPATH上のディレクトリに置きます。
+
+```sh
+dotnet publish Tatami.Cli/Tatami.Cli.csproj -c Release -o ./artifacts/tatami
+./artifacts/tatami/tatami --help
+```
+
+framework-dependentで発行されるため、実行先には.NET 10ランタイムが必要です。
 
 ```sh
 dotnet run --project Tatami.Cli -- --help
@@ -33,6 +40,8 @@ dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output 
 ```
 
 `notes list` は公開状態と相対パスを表示し、`notes show` はFront Matterと公開判定を表示します。`notes create` は `publish: false` の新規ノートを作成し、`--directory` で入力内の作成先を選べます。`notes rename` は入力内のノート名を変更し、同名ファイルを上書きしません。`notes trash <path>` はノートをTatamiの `.tatami-trash/` に移動します。`notes trash list` で一覧を表示し、表示されたIDを `notes restore <id>` に渡すと元の場所に戻せます。CLIからゴミ箱を完全削除する機能はありません。`config show` は設定JSONを表示し、`config set <key> <value>` は `input`、`output`、`builder`、`external.project`、`external.executable`、`external.arguments`（JSON文字列配列）、`external.timeout`（秒）を更新します。`--config <file>` を指定すると任意の設定ファイルを読み書きします。`doctor` は.NET SDK、設定、入力・出力パス、外部ビルダーの実行ファイルとプロジェクトを診断し、問題があれば終了コード1を返します。`build` は内蔵または設定済み外部ビルダーを使います。入力・出力の省略時は `--config <file>` またはアプリのユーザー設定を参照します。`--json` は件数・出力先・成否をJSONで出します。成功は終了コード0、実行時エラーは1、引数エラーは2です。
+
+通常のコマンド結果は標準出力、診断は標準エラーへ出ます。`--quiet` は補助メッセージを抑制し、`--verbose` は一覧のタイトルなどを追加表示します。入力や出力の相対パスは作業ディレクトリ基準です。
 
 ## 使い方
 

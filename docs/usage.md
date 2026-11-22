@@ -184,3 +184,35 @@ npm ci
 アプリ内プレビューは127.0.0.1の一時ポートでHTTP配信します。Astroの `/_astro/...` のCSS・JSやディレクトリ形式のURLにも対応し、Tatamiが管理する生成物だけを配信します。外部ネットワークには公開しません。アプリ終了時にサーバーを停止します。
 
 プレビューにはASP.NET Core 10ランタイムを使用します。.NET 10 SDKには含まれています。生成HTMLを通常のブラウザで確認する場合も、外部ビルダーがルート基準のパスを生成する場合はHTTPサーバーを使ってください。SSR、開発サーバーの常駐起動、自動デプロイは今回の対象外です。
+
+## 9. CLIを使う
+
+CLIはGUIを開かず、ノート確認・変更とサイトビルドを実行します。.NET 10 SDKがあるリポジトリでは、そのまま起動できます。
+
+```sh
+dotnet run --project Tatami.Cli -- --help
+dotnet run --project Tatami.Cli -- notes list --input ./notes
+dotnet run --project Tatami.Cli -- build --input ./notes --output ./site-output --json
+```
+
+`tatami` 実行ファイルを発行するには、プロジェクトルートで次を実行します。
+
+```sh
+dotnet publish Tatami.Cli/Tatami.Cli.csproj -c Release -o ./artifacts/tatami
+./artifacts/tatami/tatami --help
+```
+
+発行物はframework-dependentです。実行先に.NET 10ランタイムを用意し、`tatami` 実行ファイルをPATH上の場所へ置いてください。
+
+| コマンド | 用途 |
+| --- | --- |
+| `tatami --help` / `--version` | ヘルプ・バージョン |
+| `tatami build` | 内蔵または設定済み外部ビルダーで生成。`--input`、`--output`、`--config`、`--json` に対応 |
+| `tatami notes list` / `show <path>` | ノート一覧・Front Matterと公開判定 |
+| `tatami notes create <name>` | 非公開ノート作成。`--directory` で作成先を指定 |
+| `tatami notes rename <path> <name>` | ノート名変更 |
+| `tatami notes trash <path>` / `trash list` / `restore <id>` | アプリ内ゴミ箱への移動・一覧・復元 |
+| `tatami config show` / `set <key> <value>` | 設定確認・変更。外部設定キーは `external.project`、`external.executable`、`external.arguments`、`external.timeout` |
+| `tatami doctor` | .NET、設定、パス、外部ビルダー診断 |
+
+入力・出力の相対パスは作業ディレクトリ基準です。`--input` や `--output` を省略すると、`--config <file>` またはアプリのユーザー設定を読みます。通常結果は標準出力、エラーと診断は標準エラーです。`--quiet` は補助メッセージを抑制し、`--verbose` は追加情報を表示します。終了コードは成功0、引数・入力エラー2、実行時エラー1です。`build --json` は成功・失敗、公開／非公開件数、出力先をJSONで標準出力へ返します。

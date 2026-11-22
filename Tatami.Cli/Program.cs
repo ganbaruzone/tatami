@@ -64,7 +64,7 @@ internal static class TatamiCli
                     OutputPath = output is null ? config.OutputPath : Path.GetFullPath(output)
                 };
                 if (string.IsNullOrWhiteSpace(effective.InputPath) || string.IsNullOrWhiteSpace(effective.OutputPath))
-                    return UsageError("入力・出力ディレクトリが必要です。--input と --output を指定するか、設定してください。");
+                    return BuildUsageError(json, effective.OutputPath, "入力・出力ディレクトリが必要です。--input と --output を指定するか、設定してください。");
                 var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
                 var result = await new BuildCoordinator().BuildAsync(effective, progress);
                 if (json)
@@ -184,11 +184,26 @@ internal static class TatamiCli
             }
             return UsageError("未対応のコマンドです。`tatami --help` を参照してください。");
         }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException or InvalidDataException or ArgumentException)
+        {
+            if (json && positional.Count == 1 && positional[0] == "build")
+                Console.WriteLine(JsonSerializer.Serialize(new { success = false, published = (int?)null, privateCount = (int?)null, output, error = ex.Message }));
+            Console.Error.WriteLine($"エラー: {ex.Message}");
+            return 2;
+        }
         catch (Exception ex)
         {
+            if (json && positional.Count == 1 && positional[0] == "build")
+                Console.WriteLine(JsonSerializer.Serialize(new { success = false, published = (int?)null, privateCount = (int?)null, output, error = ex.Message }));
             Console.Error.WriteLine($"エラー: {ex.Message}");
             return 1;
         }
+    }
+
+    private static int BuildUsageError(bool json, string output, string message)
+    {
+        if (json) Console.WriteLine(JsonSerializer.Serialize(new { success = false, published = (int?)null, privateCount = (int?)null, output, error = message }));
+        return UsageError(message);
     }
 
     private static async Task<SiteConfig> ResolveConfigAsync(string? configPath)
@@ -206,7 +221,7 @@ internal static class TatamiCli
         var problems = 0;
         void Check(string label, bool ok, string detail)
         {
-            Console.WriteLine($"{(ok ? "OK" : "NG")}\t{label}\t{detail}");
+            Console.Error.WriteLine($"{(ok ? "OK" : "NG")}\t{label}\t{detail}");
             if (!ok) problems++;
         }
 
