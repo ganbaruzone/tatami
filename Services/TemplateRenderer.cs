@@ -41,7 +41,7 @@ public sealed class TemplateRenderer
                 && absolute.Scheme is not ("https" or "http" or "mailto")) return "#";
             return url;
         };
-        renderer.Render(Markdown.Parse(markdown, _pipeline));
+        renderer.Render(Markdown.Parse(PrivateContentFilter.Remove(markdown), _pipeline));
         return writer.ToString();
     }
 

@@ -1,37 +1,148 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:Tatami.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:io="using:System.IO"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="450"
+        xmlns:m="using:Tatami.Models"
+        xmlns:edit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
         x:Class="Tatami.Views.MainWindow"
-        x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="Tatami">
-
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-        to set the actual DataContext for runtime, set the DataContext property in code (look at
-        App.axaml.cs) -->
-        <vm:MainViewModel />
-    </Design.DataContext>
-    <StackPanel Background="Lavender">
-        <Button Name="SelectFolderButton" HorizontalAlignment="Center" Click="GetFiles">フォルダを選択</Button>
-        <Button Name="BuildSiteButton" HorizontalAlignment="Center" Click="BuildSite">サイトをビルド</Button>
-        <TextBlock Name="BuildStatus" TextWrapping="Wrap" Margin="8" />
-        <ListBox Name="Folder_Contents"
-                 SelectionMode="Single"
-                 SelectionChanged="File_Selected">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="io:FileInfo">
-                    <TextBlock Text="{Binding Name}"/>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-        <TextBox Name="content"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="Wrap" />
-    </StackPanel>
+        Title="Tatami" Width="1180" Height="780" MinWidth="760" MinHeight="500"
+        Background="#181A1F" Foreground="#D7DAE0" RequestedThemeVariant="Dark"
+        Icon="/Assets/avalonia-logo.ico">
+    <Window.Styles>
+        <Style Selector="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button:pointerover">
+            <Setter Property="Background" Value="#30343E" />
+        </Style>
+        <Style Selector="TreeViewItem" x:DataType="m:WorkspaceEntry">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="48,*,26">
+        <Border Background="#202229" BorderBrush="#30333B" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,0,12,0">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Border Background="#82C6AF" CornerRadius="4" Width="22" Height="22">
+                        <TextBlock Text="T" Foreground="#12231D" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Tatami" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Name="WorkspaceTitle" Grid.Column="1" Text="Markdown workspace" Foreground="#8D95A5" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <StackPanel Name="Toolbar" Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Click="GetFiles" Content="メモを開く" />
+                    <Button Click="TogglePreview" Content="編集 / HTML" ToolTip.Tip="編集画面とビルド済みHTMLを切り替え" />
+                    <Button Name="SaveButton" Click="SaveFile" Content="保存" IsEnabled="False" ToolTip.Tip="保存  ⌘S / Ctrl+S" />
+                    <Button Name="BuildSiteButton" Click="BuildSite" Content="▷  サイトをビルド" Background="#285D4D" Foreground="#E3F5EB" />
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="240" MinWidth="160" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" MinWidth="340" />
+            </Grid.ColumnDefinitions>
+            <Border Background="#202229" BorderBrush="#30333B" BorderThickness="0,0,1,0">
+                <StackPanel Spacing="20" Margin="0,18">
+                    <TextBlock Text="▤" FontSize="24" Foreground="#82C6AF" HorizontalAlignment="Center" ToolTip.Tip="エクスプローラー" />
+                    <TextBlock Text="M↓" FontSize="15" Foreground="#727A8A" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <Grid Grid.Column="1" RowDefinitions="42,Auto,Auto,*" Background="#202229">
+                <Grid ColumnDefinitions="*,Auto" Margin="16,0,8,0">
+                    <TextBlock Text="EXPLORER" FontSize="11" LetterSpacing="1.5" VerticalAlignment="Center" Foreground="#A8B0BE" />
+                    <Button Name="RefreshButton" Grid.Column="1" Content="↻" Click="RefreshFiles" ToolTip.Tip="ファイル一覧を更新" />
+                </Grid>
+                <StackPanel Grid.Row="1" Margin="12,0,12,14" Spacing="6">
+                    <Button Click="GetFiles" Content="メモのディレクトリ…" HorizontalAlignment="Stretch" />
+                    <TextBlock Name="NotesPathLabel" Text="未選択" FontSize="10" Foreground="#8D95A5" TextWrapping="Wrap" MaxHeight="48" />
+                    <Button Name="OutputFolderButton" Click="SelectOutputFolder" Content="HTML出力先…" HorizontalAlignment="Stretch" />
+                    <TextBlock Name="OutputPathLabel" Text="未選択" FontSize="10" Foreground="#8D95A5" TextWrapping="Wrap" MaxHeight="48" />
+                    <Button Name="BuilderSettingsButton" Click="ConfigureBuilder" Content="ビルダー設定…" HorizontalAlignment="Stretch" />
+                    <TextBlock Name="BuilderLabel" Text="内蔵ビルダー" FontSize="10" Foreground="#82C6AF" />
+                </StackPanel>
+                <StackPanel Grid.Row="2" Margin="8,0,8,8" Spacing="4">
+                    <TextBlock Name="FolderLabel" Text="フォルダ未選択" Margin="8,0" FontSize="12" FontWeight="SemiBold" Foreground="#C2C8D2" TextTrimming="CharacterEllipsis" />
+                    <Grid Name="NoteActions" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                        <Button Name="NewNoteButton" Click="NewNote" Content="＋ 新規" ToolTip.Tip="選択フォルダにMarkdownを作成（⌘N / Ctrl+N）" />
+                        <Button Name="RenameNoteButton" Grid.Column="1" Click="RenameNote" Content="名前変更" IsEnabled="False" ToolTip.Tip="編集中のノートの名前を変更" />
+                        <Button Name="TrashNoteButton" Grid.Row="1" Click="TrashNote" Content="ゴミ箱へ" IsEnabled="False" ToolTip.Tip="編集中のノートをTatamiのゴミ箱へ移動" />
+                        <Button Grid.Row="1" Grid.Column="1" Click="RestoreNote" Content="復元" ToolTip.Tip="Tatamiのゴミ箱から復元" />
+                    </Grid>
+                </StackPanel>
+                <TreeView Name="FileTree" Grid.Row="3" Background="Transparent" SelectionChanged="FileSelected">
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate DataType="m:WorkspaceEntry" ItemsSource="{Binding Children}" x:DataType="m:WorkspaceEntry">
+                            <StackPanel Orientation="Horizontal" Spacing="8" ToolTip.Tip="{Binding FullPath}">
+                                <TextBlock Text="{Binding Icon}" Foreground="#82C6AF" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </Grid>
+            <GridSplitter Grid.Column="2" Background="#30333B" ResizeDirection="Columns" />
+            <Grid Grid.Column="3">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="180" />
+                    <RowDefinition Height="4" />
+                    <RowDefinition Height="170" MinHeight="80" />
+                </Grid.RowDefinitions>
+                <Grid Name="EditingPane" RowDefinitions="38,30,*" Background="#181A1F">
+                    <Border Background="#202229" BorderBrush="#30333B" BorderThickness="0,0,0,1">
+                        <Border Background="#181A1F" BorderBrush="#82C6AF" BorderThickness="0,2,0,0" HorizontalAlignment="Left" MinWidth="180" Padding="16,0">
+                            <TextBlock Name="BufferTab" Text="ようこそ" VerticalAlignment="Center" FontSize="12" />
+                        </Border>
+                    </Border>
+                    <TextBlock Name="Breadcrumb" Grid.Row="1" Text="Tatami  /  Markdown editor" Margin="20,0" Foreground="#828C9E" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <edit:TextEditor Name="Editor" Grid.Row="2" ShowLineNumbers="True" IsVisible="False"
+                                     Background="#181A1F" Foreground="#D7DAE0" LineNumbersForeground="#626C7D"
+                                     FontFamily="Menlo,Consolas,monospace" FontSize="14" Padding="12,12,20,24"
+                                     WordWrap="True" />
+                    <StackPanel Name="Welcome" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
+                        <TextBlock Text="書く。つなぐ。公開する。" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="左の一覧からMarkdownファイルを開いてください。" Foreground="#959EAE" FontSize="13" />
+                        <TextBlock Text="⌘S / Ctrl+S  保存     ·     ⌘F / Ctrl+F  検索" Foreground="#697487" FontSize="12" />
+                    </StackPanel>
+                </Grid>
+                <Grid Name="PreviewPane" RowDefinitions="44,30,*" IsVisible="False" Background="#181A1F">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,4">
+                        <TextBlock Text="HTML PREVIEW" FontSize="11" Foreground="#82C6AF" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <ComboBox Name="PreviewPages" Grid.Column="1" HorizontalAlignment="Stretch" SelectionChanged="PreviewPageSelected" PlaceholderText="ビルド済みの記事を選択" />
+                        <Button Grid.Column="2" Content="↻" Click="ReloadPreview" ToolTip.Tip="ビルド済みHTMLを再読み込み" />
+                    </Grid>
+                    <TextBlock Name="PreviewStatus" Grid.Row="1" Text="ビルド済みHTMLを表示します。" FontSize="11" Foreground="#959EAE" Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <ContentControl Name="PreviewHost" Grid.Row="2" />
+                </Grid>
+                <GridSplitter Grid.Row="1" Background="#30333B" ResizeDirection="Rows" />
+                <Grid Grid.Row="2" RowDefinitions="36,*" Background="#181A1F">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,0,8,0">
+                        <Border BorderBrush="#82C6AF" BorderThickness="0,0,0,2" Padding="0,0,0,2">
+                            <TextBlock Text="出力 / 問題" FontSize="12" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Name="ProblemSummary" Grid.Column="1" Text="準備完了" Foreground="#848E9F" FontSize="11" Margin="16,0" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Name="CancelBuildButton" Content="ビルドを中止" Click="CancelBuild" IsVisible="False" />
+                            <Button Content="クリア" Click="ClearOutput" />
+                        </StackPanel>
+                    </Grid>
+                    <ScrollViewer Name="OutputScroll" Grid.Row="1" Margin="18,10">
+                        <SelectableTextBlock Name="OutputLog" Text="フォルダを開いて編集を始めましょう。" FontFamily="Menlo,Consolas,monospace" FontSize="12" Foreground="#AAB4C3" TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+        <Border Grid.Row="2" Background="#244D40">
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="14,0">
+                <TextBlock Name="StatusText" TextTrimming="CharacterEllipsis" Text="Tatami  •  準備完了" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Name="CursorStatus" Grid.Column="1" Text="行 1, 列 1" FontSize="11" VerticalAlignment="Center" Margin="16,0" />
+                <TextBlock Name="EncodingStatus" Grid.Column="2" Text="UTF-8   Markdown" FontSize="11" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

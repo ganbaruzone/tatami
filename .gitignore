@@ -76,3 +76,11 @@ Desktop.ini
 
 # Tatami generated site (use this output directory or add your own)
 /site-output/
+
+# External generator projects
+**/node_modules/
+**/.astro/
+**/dist/
+
+# Tatami recoverable note trash
+**/.tatami-trash/

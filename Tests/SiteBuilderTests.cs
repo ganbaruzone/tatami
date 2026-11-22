@@ -172,7 +172,7 @@ public sealed class SiteBuilderTests : IDisposable
         var path = Path.Combine(_root, "site.json");
         var config = new SiteConfig(_input, _output);
         await config.SaveAsync(path);
-        Assert.Equal(config, await SiteConfig.LoadAsync(path));
+        Assert.Equivalent(config, await SiteConfig.LoadAsync(path));
         await _builder.BuildAsync(await SiteConfig.LoadAsync(path));
     }
 

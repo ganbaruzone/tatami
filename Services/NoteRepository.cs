@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Tatami.Models;
 using YamlDotNet.Serialization;
@@ -18,9 +19,12 @@ public sealed class NoteRepository
         .WithTypeConverter(new DateOnlyConverter())
         .Build();
 
-    public IEnumerable<Note> ReadAll(string inputPath, string outputPath)
+    public IEnumerable<Note> ReadAll(string inputPath, string outputPath, params string[] excludedPaths)
     {
-        foreach (var file in Enumerate(inputPath, outputPath))
+        if (Path.GetFullPath(inputPath).Split(Path.DirectorySeparatorChar)
+            .Any(part => part.Equals(NoteFileService.TrashFolderName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Tatamiのゴミ箱はビルド対象にできません。");
+        foreach (var file in Enumerate(inputPath, outputPath, excludedPaths))
         {
             Note note;
             try { note = Parse(file, File.ReadAllText(file)); }
@@ -30,18 +34,18 @@ public sealed class NoteRepository
         }
     }
 
-    private static IEnumerable<string> Enumerate(string directory, string outputPath)
+    private static IEnumerable<string> Enumerate(string directory, string outputPath, string[] excludedPaths)
     {
         foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
         {
-            if (PathSafety.IsWithin(entry, outputPath)) continue;
+            if (PathSafety.IsWithin(entry, outputPath) || System.Linq.Enumerable.Any(excludedPaths, root => PathSafety.IsWithin(entry, root))) continue;
             var attributes = File.GetAttributes(entry);
             // Do not follow links to files outside the selected workspace, or recursive links.
             if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
             if ((attributes & FileAttributes.Directory) != 0)
             {
-                if (Path.GetFileName(entry) == ".git") continue;
-                foreach (var child in Enumerate(entry, outputPath)) yield return child;
+                if (Path.GetFileName(entry) is ".git" or "node_modules" or ".astro" or ".tatami-trash") continue;
+                foreach (var child in Enumerate(entry, outputPath, excludedPaths)) yield return child;
             }
             else if (string.Equals(Path.GetExtension(entry), ".md", StringComparison.OrdinalIgnoreCase))
                 yield return entry;
@@ -57,7 +61,7 @@ public sealed class NoteRepository
         while ((line = reader.ReadLine()) != null)
         {
             if (line.Trim() is "---" or "...")
-                return new Note(path, _yaml.Deserialize<NoteMetadata>(yaml.ToString()) ?? new NoteMetadata(), reader.ReadToEnd());
+                return new Note(path, _yaml.Deserialize<NoteMetadata>(yaml.ToString()) ?? new NoteMetadata(), reader.ReadToEnd(), yaml.ToString());
             yaml.AppendLine(line);
         }
         throw new InvalidDataException("Front Matterの終端がありません。");

@@ -2,7 +2,7 @@ using System;
 
 namespace Tatami.Models;
 
-public sealed record Note(string SourcePath, NoteMetadata Metadata, string Markdown);
+public sealed record Note(string SourcePath, NoteMetadata Metadata, string Markdown, string? FrontMatter = null);
 
 public sealed class NoteMetadata
 {

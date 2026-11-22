@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -36,12 +37,14 @@ internal static class PathSafety
 
     public static string OutputFile(string root, string relative)
     {
-        if (relative != "style.css")
-        {
-            var parts = relative.Split('/');
-            if (parts.Length != 2 || parts[1] != "index.html" || Slug(parts[0]) != parts[0])
-                throw new InvalidDataException("生成物一覧に不正なパスがあります。");
-        }
+        var parts = relative.Split('/');
+        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)
+            || relative.Contains('\\') || relative.Any(char.IsControl)
+            || parts.Any(part => part is "" or "." or ".." || part.IndexOfAny([':', '*', '?', '"', '<', '>', '|']) >= 0
+                || part.EndsWith('.') || part.EndsWith(' ')
+                || part.Equals(".git", StringComparison.OrdinalIgnoreCase)
+                || part.StartsWith(".tatami-", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("生成物一覧に不正なパスがあります。");
         var path = Path.GetFullPath(Path.Combine(root, relative));
         if (!IsWithin(path, root)) throw new InvalidDataException("出力先の範囲外です。");
         RejectLinks(path);
