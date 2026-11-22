@@ -34,6 +34,8 @@
                 <TextBlock Name="WorkspaceTitle" Grid.Column="1" Text="Markdown workspace" Foreground="#8D95A5" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 <StackPanel Name="Toolbar" Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <Button Click="GetFiles" Content="メモを開く" />
+                    <Button Click="QuickOpen" Content="ファイルを開く…" ToolTip.Tip="ファイル名で開く  ⌘P / Ctrl+P" />
+                    <Button Click="SearchAllNotes" Content="全体検索" ToolTip.Tip="ノート本文を検索  ⌘⇧F / Ctrl+Shift+F" />
                     <Button Click="TogglePreview" Content="編集 / HTML" ToolTip.Tip="編集画面とビルド済みHTMLを切り替え" />
                     <Button Name="SaveButton" Click="SaveFile" Content="保存" IsEnabled="False" ToolTip.Tip="保存  ⌘S / Ctrl+S" />
                     <Button Name="BuildSiteButton" Click="BuildSite" Content="▷  サイトをビルド" Background="#285D4D" Foreground="#E3F5EB" />
@@ -113,7 +115,7 @@
                     <StackPanel Name="Welcome" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
                         <TextBlock Text="書く。つなぐ。公開する。" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="左の一覧からMarkdownファイルを開いてください。" Foreground="#959EAE" FontSize="13" />
-                        <TextBlock Text="⌘S / Ctrl+S  保存     ·     ⌘F / Ctrl+F  検索" Foreground="#697487" FontSize="12" />
+                        <TextBlock Text="⌘P / Ctrl+P ファイルを開く   ·   ⌘⇧F / Ctrl+Shift+F 全体検索" Foreground="#697487" FontSize="12" />
                     </StackPanel>
                 </Grid>
                 <Grid Name="PreviewPane" RowDefinitions="44,30,*" IsVisible="False" Background="#181A1F">

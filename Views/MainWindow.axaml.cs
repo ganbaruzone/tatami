@@ -85,8 +85,61 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             await RunAsync(SaveCurrentAsync);
+            return;
+        }
+        if (e.Key == Key.P && e.KeyModifiers == modifier)
+        {
+            e.Handled = true;
+            await RunAsync(() => FindNotesAsync(searchContents: false));
+            return;
+        }
+        if (e.Key == Key.F && e.KeyModifiers == (modifier | KeyModifiers.Shift))
+        {
+            e.Handled = true;
+            await RunAsync(() => FindNotesAsync(searchContents: true));
         }
     }
+
+    private async Task FindNotesAsync(bool searchContents)
+    {
+        if (_notesPath == null)
+        {
+            Log("先にメモのディレクトリを開いてください。", true);
+            return;
+        }
+        ApplyMetadataSettings();
+        var entries = await Task.Run(() => WorkspaceEntry.Read(_notesPath));
+        var paths = new List<string>();
+        void AddFiles(IEnumerable<WorkspaceEntry> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.IsDirectory) AddFiles(node.Children);
+                else paths.Add(node.FullPath);
+            }
+        }
+        AddFiles(entries);
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        foreach (var tab in _tabs)
+            if (!paths.Contains(tab.Path, pathComparer)) paths.Add(tab.Path);
+        var openDocuments = _tabs.ToDictionary(tab => tab.Path, tab => tab.Buffer.Text, pathComparer);
+        var finder = new NoteFinderWindow(_notesPath, searchContents, paths, openDocuments);
+        var result = await finder.ShowDialog<NoteFinderResult?>(this);
+        if (result == null) return;
+        await OpenTabAsync(result.Path);
+        if (result.Line is int lineNumber && lineNumber >= 1 && lineNumber <= Editor.Document.LineCount)
+        {
+            Editor.TextArea.Caret.Offset = Editor.Document.GetLineByNumber(lineNumber).Offset;
+            Editor.ScrollToLine(lineNumber);
+        }
+        Editor.TextArea.Focus();
+    }
+
+    private async void QuickOpen(object? sender, RoutedEventArgs e) =>
+        await RunAsync(() => FindNotesAsync(searchContents: false));
+
+    private async void SearchAllNotes(object? sender, RoutedEventArgs e) =>
+        await RunAsync(() => FindNotesAsync(searchContents: true));
 
     private void UpdateBufferStatus()
     {
