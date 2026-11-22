@@ -26,7 +26,7 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 ### 必須コマンド（初期リリース）
 
 - [x] `tatami --help` / `tatami --version`: 使用方法・実装済みサブコマンド・バージョンを表示する。
-- [ ] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
+- [x] `tatami build`: 内蔵または設定済み外部ビルダーでサイトをビルドする。`--input <dir>` と `--output <dir>` を個別に指定でき、省略時は `--config <file>` または既存のユーザー設定を利用する。
 - [x] `tatami notes list`: Markdownノートを再帰的に一覧表示する。公開／非公開を示し、`--input <dir>` で対象を選ぶ。
 - [x] `tatami notes show <path>`: ノートのFront Matterと公開判定を表示する。
 - [ ] `tatami notes create <name> [--directory <dir>]`: `NoteFileService` を使い、非公開の新規ノートを作成する。
@@ -59,6 +59,14 @@ UIを起動せず、既存サービスを再利用するCLIを追加する。コ
 - CLIのヘルプ、バージョン、ノート一覧、Front Matter表示、引数エラー終了コード2を確認。
 - `git diff --check`: 成功。
 - ビルド、ノート変更、設定変更、ゴミ箱、doctor、JSON出力は未実装。
+
+### CLI `build` 実装記録（2026-11-22）
+
+`BuildCoordinator` を呼び出す `tatami build` を追加。`--input` / `--output` の個別上書き、任意の `--config` JSON、設定未指定時のユーザー設定、`--json` 結果（公開・非公開件数、出力先、成否）に対応しました。
+
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --nologo`: 成功（警告0・エラー0）。
+- 一時ノートから内蔵ビルドを実行し、JSON結果と生成HTMLを確認。
+- `git diff --check`: 成功。
 
 ## 今後の動作確認方針
 

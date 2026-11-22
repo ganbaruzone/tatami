@@ -29,14 +29,21 @@ internal static class TatamiCli
         if (_quiet && _verbose) return UsageError("--quiet と --verbose は同時に指定できません。");
         var positional = new List<string>();
         string? input = null;
+        string? output = null;
+        string? configPath = null;
+        var json = false;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] is "--quiet" or "--verbose") continue;
-            if (args[i] == "--input")
+            if (args[i] == "--json") { json = true; continue; }
+            if (args[i] is "--input" or "--output" or "--config")
             {
+                var option = args[i];
                 if (++i >= args.Length || args[i].StartsWith("--", StringComparison.Ordinal))
-                    return UsageError("--input にはディレクトリを指定してください。");
-                input = args[i];
+                    return UsageError($"{option} には値を指定してください。");
+                if (option == "--input") input = args[i];
+                else if (option == "--output") output = args[i];
+                else configPath = args[i];
                 continue;
             }
             if (args[i].StartsWith('-')) return UsageError($"不明なオプションです: {args[i]}");
@@ -45,6 +52,24 @@ internal static class TatamiCli
 
         try
         {
+            if (positional.Count == 1 && positional[0] == "build")
+            {
+                var config = await ResolveConfigAsync(configPath);
+                var effective = config with
+                {
+                    InputPath = input is null ? config.InputPath : Path.GetFullPath(input),
+                    OutputPath = output is null ? config.OutputPath : Path.GetFullPath(output)
+                };
+                if (string.IsNullOrWhiteSpace(effective.InputPath) || string.IsNullOrWhiteSpace(effective.OutputPath))
+                    return UsageError("入力・出力ディレクトリが必要です。--input と --output を指定するか、設定してください。");
+                var progress = _quiet ? null : new Progress<string>(message => Console.Error.WriteLine(message));
+                var result = await new BuildCoordinator().BuildAsync(effective, progress);
+                if (json)
+                    Console.WriteLine(JsonSerializer.Serialize(new { success = true, published = result.PublishedCount, privateCount = result.PrivateCount, output = result.OutputPath }));
+                else if (!_quiet)
+                    Console.WriteLine($"ビルド成功: 公開 {result.PublishedCount} 件、非公開 {result.PrivateCount} 件、出力先 {result.OutputPath}");
+                return 0;
+            }
             if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
             {
                 var root = await ResolveInputAsync(input);
@@ -86,6 +111,17 @@ internal static class TatamiCli
         }
     }
 
+    private static async Task<SiteConfig> ResolveConfigAsync(string? configPath)
+    {
+        if (configPath is not null)
+        {
+            var fullPath = Path.GetFullPath(configPath);
+            if (!File.Exists(fullPath)) throw new FileNotFoundException($"設定ファイルがありません: {fullPath}");
+            return await SiteConfig.LoadAsync(fullPath);
+        }
+        return await new WorkspaceSettings().LoadAsync() ?? new SiteConfig("", "");
+    }
+
     private static async Task<string> ResolveInputAsync(string? input)
     {
         if (!string.IsNullOrWhiteSpace(input))
@@ -116,12 +152,17 @@ tatami {Version}
 使い方:
   tatami [--quiet|--verbose] notes list [--input <dir>]
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
+  tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
 
 notes list   Markdownノートを再帰的に一覧表示します（公開状態つき）。
 notes show   Front Matterと公開判定を表示します。
---input      対象ノートのディレクトリ（省略時はアプリ設定を使用）。
+build        設定済みビルダーでサイトを生成します。
+--input      対象ノートのディレクトリ（省略時は設定を使用）。
+--output     HTML出力先（省略時は設定を使用）。
+--config     設定JSONのパス（省略時はアプリ設定を使用）。
+--json       build結果をJSONで標準出力へ出します。
 --quiet      補助メッセージを抑制します。
 --verbose    補足情報を標準エラーへ表示します。
 
