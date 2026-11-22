@@ -45,6 +45,33 @@ public sealed class EditorBufferTests : IDisposable
         Assert.True(buffer.IsDirty);
     }
 
+    [Fact]
+    public async Task DiskSnapshotMatchesTheOpenedFile()
+    {
+        await File.WriteAllTextAsync(_path, "Snapshot content");
+        var buffer = await EditorBuffer.OpenAsync(_path);
+
+        var (exists, hash, text) = await buffer.ReadDiskSnapshotAsync();
+
+        Assert.True(exists);
+        Assert.Equal(buffer.SavedHash, hash);
+        Assert.Equal(buffer.Text, text);
+    }
+
+    [Fact]
+    public async Task DiskSnapshotReportsDeletedFile()
+    {
+        await File.WriteAllTextAsync(_path, "Snapshot content");
+        var buffer = await EditorBuffer.OpenAsync(_path);
+        File.Delete(_path);
+
+        var (exists, hash, text) = await buffer.ReadDiskSnapshotAsync();
+
+        Assert.False(exists);
+        Assert.Empty(hash);
+        Assert.Null(text);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

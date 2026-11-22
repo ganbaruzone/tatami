@@ -9,10 +9,14 @@ namespace Tatami.Services;
 internal static partial class PathSafety
 {
     // Case-insensitive comparisons deliberately also protect portable sites on Windows/macOS.
-    public static bool IsWithin(string path, string root) =>
-        string.Equals(Path.GetFullPath(path), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase)
-        || Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root))
-            + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    public static bool IsWithin(string path, string root)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullRoot = Path.GetFullPath(root);
+        return string.Equals(fullPath, fullRoot, StringComparison.OrdinalIgnoreCase)
+            || fullPath.StartsWith(Path.TrimEndingDirectorySeparator(fullRoot)
+                + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
 
     public static string Slug(string value)
     {

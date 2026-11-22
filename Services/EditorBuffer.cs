@@ -23,11 +23,8 @@ public sealed class EditorBuffer
     public async Task<(bool Exists, string Hash, string? Text)> ReadDiskSnapshotAsync()
     {
         if (!File.Exists(Path)) return (false, "", null);
-        PathSafety.RejectLinks(Path);
-        var bytes = await File.ReadAllBytesAsync(Path);
-        using var stream = new MemoryStream(bytes);
-        using var reader = new StreamReader(stream, new UTF8Encoding(false, true), true);
-        return (true, Hash(bytes), await reader.ReadToEndAsync());
+        var (bytes, text, _) = await ReadFileAsync(Path);
+        return (true, Hash(bytes), text);
     }
 
     public async Task ReloadFromDiskAsync()
@@ -53,12 +50,18 @@ public sealed class EditorBuffer
 
     public static async Task<EditorBuffer> OpenAsync(string path)
     {
+        var (bytes, text, encoding) = await ReadFileAsync(path);
+        return new EditorBuffer(path, bytes, text, encoding);
+    }
+
+    private static async Task<(byte[] Bytes, string Text, Encoding Encoding)> ReadFileAsync(string path)
+    {
         PathSafety.RejectLinks(path);
         var bytes = await File.ReadAllBytesAsync(path);
         using var stream = new MemoryStream(bytes);
         using var reader = new StreamReader(stream, new UTF8Encoding(false, true), true);
         var text = await reader.ReadToEndAsync();
-        return new EditorBuffer(path, bytes, text, reader.CurrentEncoding);
+        return (bytes, text, reader.CurrentEncoding);
     }
 
     public void Rename(string workspace, string name) => Path = new NoteFileService(workspace).Rename(Path, name);
