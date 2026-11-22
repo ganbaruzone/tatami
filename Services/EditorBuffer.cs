@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -9,16 +10,27 @@ namespace Tatami.Services;
 // Independent of the editor widget so save/conflict behavior can be tested without a UI.
 public sealed class EditorBuffer
 {
-    private byte[] _savedBytes;
     private string _savedText;
+    private string _savedHash;
+    private bool _recoveredDirty;
     private readonly Encoding _encoding;
     public string Path { get; private set; }
     public string Text { get; set; }
-    public bool IsDirty => Text != _savedText;
+    public bool IsDirty => _recoveredDirty || Text != _savedText;
     public string EncodingName => _encoding.WebName.ToUpperInvariant();
+    public string SavedHash => _savedHash;
 
     private EditorBuffer(string path, byte[] bytes, string text, Encoding encoding)
-    { Path = path; _savedBytes = bytes; _savedText = Text = text; _encoding = encoding; }
+    { Path = path; _savedText = Text = text; _savedHash = Hash(bytes); _encoding = encoding; }
+
+    public void RestoreBackup(string text, string baselineHash, bool wasDirty)
+    {
+        if (baselineHash.Length != 64 || !baselineHash.All(Uri.IsHexDigit))
+            throw new InvalidDataException("退避内容のベースラインが不正です。");
+        Text = text;
+        _savedHash = baselineHash.ToUpperInvariant();
+        _recoveredDirty = wasDirty;
+    }
 
     public static async Task<EditorBuffer> OpenAsync(string path)
     {
@@ -36,7 +48,7 @@ public sealed class EditorBuffer
     {
         PathSafety.RejectLinks(Path);
         var current = await File.ReadAllBytesAsync(Path);
-        if (!current.SequenceEqual(_savedBytes))
+        if (!Hash(current).Equals(_savedHash, StringComparison.Ordinal))
             throw new IOException("ファイルが外部で変更されています。編集内容をコピーして退避し、ファイルを開き直してください。上書きは行っていません。");
         var text = Text;
         var bytes = _encoding.GetPreamble().Concat(_encoding.GetBytes(text)).ToArray();
@@ -46,9 +58,12 @@ public sealed class EditorBuffer
             await File.WriteAllBytesAsync(temporary, bytes);
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(temporary, File.GetUnixFileMode(Path));
             File.Move(temporary, Path, true);
-            _savedBytes = bytes;
             _savedText = text;
+            _savedHash = Hash(bytes);
+            _recoveredDirty = false;
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
+
+    private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 }

@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using AvaloniaEdit.Search;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
@@ -25,6 +26,8 @@ public partial class MainWindow : Window
     private string? _notesPath;
     private string? _outputPath;
     private readonly WorkspaceSettings _settings = new();
+    private readonly WorkspaceRecoveryStore _recoveryStore = new();
+    private readonly DispatcherTimer _recoveryTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private NativeWebView? _webView;
     private bool _refreshingPages;
     private string _builder = "builtin";
@@ -42,6 +45,9 @@ public partial class MainWindow : Window
     private bool _changingSelection;
     private bool _suppressMetadataChanges;
     private bool _metadataPending;
+    private bool _recoveryDeferred;
+    private bool _recoveryInProgress;
+    private bool _recoveryErrorLogged;
     private bool _allowClose;
 
     public MainWindow()
@@ -53,7 +59,11 @@ public partial class MainWindow : Window
             Editor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
         Editor.TextChanged += (_, _) =>
         {
-            if (_buffer != null) _buffer.Text = Editor.Text;
+            if (_buffer != null)
+            {
+                if (!string.Equals(_buffer.Text, Editor.Text, StringComparison.Ordinal)) _recoveryDeferred = false;
+                _buffer.Text = Editor.Text;
+            }
             if (_buffer != null && !_suppressMetadataChanges && !_metadataPending)
                 LoadMetadataSettings(Editor.Text);
             UpdateBufferStatus();
@@ -68,7 +78,9 @@ public partial class MainWindow : Window
             CursorStatus.Text = $"行 {Editor.TextArea.Caret.Line}, 列 {Editor.TextArea.Caret.Column}";
         AddHandler(KeyDownEvent, HandleShortcut, RoutingStrategies.Tunnel);
         Closing += OnClosing;
-        Closed += async (_, _) => await _previewServer.DisposeAsync();
+        _recoveryTimer.Tick += async (_, _) => await BackupTickAsync();
+        _recoveryTimer.Start();
+        Closed += async (_, _) => { _recoveryTimer.Stop(); await _previewServer.DisposeAsync(); };
         Opened += async (_, _) => await RunAsync(RestoreWorkspaceAsync);
     }
 
@@ -135,6 +147,50 @@ public partial class MainWindow : Window
         Editor.TextArea.Focus();
     }
 
+    private async Task BackupTickAsync()
+    {
+        if (_busy || _notesPath == null) return;
+        try
+        {
+            await UpdateRecoverySnapshotAsync();
+            _recoveryErrorLogged = false;
+        }
+        catch (Exception ex)
+        {
+            if (!_recoveryErrorLogged) Log($"自動退避に失敗しました: {ex.Message}", true);
+            _recoveryErrorLogged = true;
+        }
+    }
+
+    private async Task UpdateRecoverySnapshotAsync()
+    {
+        if (_notesPath == null || _recoveryInProgress) return;
+        _recoveryInProgress = true;
+        try
+        {
+            if (!_tabs.Any(tab => tab.IsDirty) && !_metadataPending)
+            {
+                if (!_recoveryDeferred) await _recoveryStore.DeleteAsync(_notesPath);
+                return;
+            }
+            _recoveryDeferred = false;
+            if (_activeTab != null) _activeTab.CaretOffset = Editor.TextArea.Caret.Offset;
+            var snapshot = new WorkspaceRecoverySnapshot(
+                1,
+                Path.GetFullPath(_notesPath),
+                DateTimeOffset.UtcNow,
+                Math.Max(0, _tabs.IndexOf(_activeTab!)),
+                _tabs.Select(tab => new RecoveredNoteTab(
+                    tab.Path, tab.Buffer.Text, tab.Buffer.SavedHash, tab.IsDirty, tab.CaretOffset,
+                    tab == _activeTab && _metadataPending,
+                    tab == _activeTab && _metadataPending ? MetadataTitle.Text : null,
+                    tab == _activeTab && _metadataPending ? MetadataSlug.Text : null,
+                    tab == _activeTab && _metadataPending && MetadataPublish.IsChecked == true)).ToArray());
+            await _recoveryStore.SaveAsync(snapshot);
+        }
+        finally { _recoveryInProgress = false; }
+    }
+
     private async void QuickOpen(object? sender, RoutedEventArgs e) =>
         await RunAsync(() => FindNotesAsync(searchContents: false));
 
@@ -198,6 +254,7 @@ public partial class MainWindow : Window
     private void MetadataSettingChanged(object? sender, EventArgs e)
     {
         if (_suppressMetadataChanges || _buffer == null) return;
+        _recoveryDeferred = false;
         _metadataPending = true;
         UpdateBufferStatus();
     }
@@ -274,8 +331,10 @@ public partial class MainWindow : Window
         ApplyMetadataSettings();
         if (!_buffer.IsDirty) return;
         await _buffer.SaveAsync();
+        _recoveryDeferred = false;
         UpdateBufferStatus();
         Log($"保存しました: {_buffer.Path}");
+        await UpdateRecoverySnapshotAsync();
     }
 
     private async Task SaveAllOpenTabsAsync()
@@ -283,8 +342,10 @@ public partial class MainWindow : Window
         ApplyMetadataSettings();
         var dirty = _tabs.Where(tab => tab.IsDirty).ToArray();
         foreach (var tab in dirty) await tab.Buffer.SaveAsync();
+        _recoveryDeferred = false;
         UpdateBufferStatus();
         if (dirty.Length > 0) Log($"開いているノートを {dirty.Length} 件保存しました。");
+        await UpdateRecoverySnapshotAsync();
     }
 
     private async Task<bool> ConfirmUnsavedAsync()
@@ -298,8 +359,10 @@ public partial class MainWindow : Window
         if (choice == "save")
         {
             foreach (var tab in dirty) await tab.Buffer.SaveAsync();
+            _recoveryDeferred = false;
             UpdateBufferStatus();
             Log($"{dirty.Length} 個のノートを保存しました。");
+            await UpdateRecoverySnapshotAsync();
             return true;
         }
         return choice == "discard";
@@ -313,7 +376,9 @@ public partial class MainWindow : Window
         if (choice == "save")
         {
             await tab.Buffer.SaveAsync();
+            _recoveryDeferred = false;
             UpdateBufferStatus();
+            await UpdateRecoverySnapshotAsync();
             return true;
         }
         return choice == "discard";
@@ -357,6 +422,8 @@ public partial class MainWindow : Window
         if (folders.Count == 0) return false;
         var path = Path.TrimEndingDirectorySeparator(folders[0].TryGetLocalPath() ?? throw new IOException("ローカルフォルダを選択してください。"));
         if (!await ConfirmUnsavedAsync()) return false;
+        if (_notesPath != null) await _recoveryStore.DeleteAsync(_notesPath);
+        _recoveryDeferred = false;
         await OpenNotesFolderAsync(path);
         await _settings.SaveAsync(CurrentConfig);
         return true;
@@ -371,6 +438,7 @@ public partial class MainWindow : Window
         _activeTab = null;
         _buffer = null;
         _metadataPending = false;
+        _recoveryDeferred = false;
         RefreshTabStrip();
         _selected = null;
         _changingSelection = true;
@@ -490,6 +558,7 @@ public partial class MainWindow : Window
         RefreshTabStrip();
         UpdateBufferStatus();
         if (_notesPath != null) await ReloadNotesAsync(_activeTab?.Path);
+        await UpdateRecoverySnapshotAsync();
     }
 
     private async Task ReloadNotesAsync(string? selectedPath)
@@ -537,6 +606,7 @@ public partial class MainWindow : Window
         Breadcrumb.Text = Path.GetRelativePath(_notesPath, _buffer.Path);
         await ReloadNotesAsync(_buffer.Path);
         UpdateBufferStatus();
+        await UpdateRecoverySnapshotAsync();
         Log($"名前を変更しました: {_buffer.Path}（公開URLの変更には再ビルドが必要です）");
     });
 
@@ -561,6 +631,7 @@ public partial class MainWindow : Window
         RefreshTabStrip();
         UpdateBufferStatus();
         await ReloadNotesAsync(_activeTab?.Path);
+        await UpdateRecoverySnapshotAsync();
         Log($"Tatamiのゴミ箱へ移動しました: {name}。公開済みHTMLへの反映には再ビルドしてください。");
     });
 
@@ -621,8 +692,103 @@ public partial class MainWindow : Window
             OutputPathLabel.Text = _outputPath;
             ToolTip.SetTip(OutputPathLabel, _outputPath);
         }
-        if (Directory.Exists(config.InputPath)) await OpenNotesFolderAsync(config.InputPath);
+        if (Directory.Exists(config.InputPath))
+        {
+            await OpenNotesFolderAsync(Path.GetFullPath(config.InputPath));
+            await OfferRecoveryAsync(_notesPath!);
+        }
         else if (!string.IsNullOrEmpty(config.InputPath)) Log("保存されたメモのディレクトリが見つかりません。選び直してください。", true);
+    }
+
+    private async Task OfferRecoveryAsync(string workspace)
+    {
+        WorkspaceRecoverySnapshot? snapshot;
+        try { snapshot = await _recoveryStore.LoadAsync(workspace); }
+        catch (Exception ex) { Log($"自動退避データを読み込めません: {ex.Message}", true); return; }
+        if (snapshot == null) return;
+        var choice = await AskRecoveryChoiceAsync(snapshot);
+        if (choice == "restore")
+        {
+            var restoredTabs = new List<(int SourceIndex, OpenNoteTab Tab, RecoveredNoteTab Saved)>();
+            for (var i = 0; i < snapshot.Tabs.Length; i++)
+            {
+                var saved = snapshot.Tabs[i];
+                try
+                {
+                    var buffer = await EditorBuffer.OpenAsync(saved.Path);
+                    buffer.RestoreBackup(saved.Text, saved.BaselineHash, saved.WasDirty);
+                    var tab = new OpenNoteTab(buffer) { CaretOffset = saved.CaretOffset };
+                    _tabs.Add(tab);
+                    restoredTabs.Add((i, tab, saved));
+                }
+                catch (Exception ex) { Log($"退避したノートを復元できませんでした: {saved.Path}: {ex.Message}", true); }
+            }
+            if (_tabs.Count == 0) { await _recoveryStore.DeleteAsync(workspace); return; }
+            _recoveryDeferred = false;
+            var active = restoredTabs.FirstOrDefault(item => item.SourceIndex == snapshot.ActiveTabIndex);
+            if (active.Tab == null) active = restoredTabs[0];
+            await ActivateTabAsync(active.Tab);
+            var activeDraft = active.Saved;
+            if (activeDraft.HasPendingMetadata)
+            {
+                _suppressMetadataChanges = true;
+                try
+                {
+                    MetadataTitle.Text = activeDraft.PendingTitle ?? "";
+                    MetadataSlug.Text = activeDraft.PendingSlug ?? "";
+                    MetadataPublish.IsChecked = activeDraft.PendingPublish;
+                }
+                finally { _suppressMetadataChanges = false; }
+                _metadataPending = true;
+                UpdateBufferStatus();
+            }
+            Editor.TextArea.Focus();
+            Log($"自動退避から { _tabs.Count } 個のタブを復元しました。");
+        }
+        else if (choice == "discard")
+        {
+            await _recoveryStore.DeleteAsync(workspace);
+            _recoveryDeferred = false;
+            Log("自動退避データを破棄しました。");
+        }
+        else _recoveryDeferred = true;
+    }
+
+    private async Task<string?> AskRecoveryChoiceAsync(WorkspaceRecoverySnapshot snapshot)
+    {
+        var dialog = new Window
+        {
+            Title = "編集内容を復元",
+            Width = 500,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark
+        };
+        var restore = new Button { Content = "復元する", Background = new SolidColorBrush(Color.Parse("#285D4D")) };
+        var discard = new Button { Content = "破棄する" };
+        var later = new Button { Content = "後で決める" };
+        restore.Click += (_, _) => dialog.Close("restore");
+        discard.Click += (_, _) => dialog.Close("discard");
+        later.Click += (_, _) => dialog.Close("later");
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 18,
+            Children =
+            {
+                new TextBlock { Text = "前回終了時の自動退避があります。", FontSize = 17, FontWeight = FontWeight.SemiBold },
+                new TextBlock
+                {
+                    Text = $"{snapshot.Tabs.Length} 個のタブ — {snapshot.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm} に保存",
+                    TextWrapping = TextWrapping.Wrap
+                },
+                new TextBlock { Text = "復元すると、保存後にディスク上のファイルが変更されていたノートは競合保護のため上書き保存できません。", TextWrapping = TextWrapping.Wrap },
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right,
+                    Children = { later, discard, restore } }
+            }
+        };
+        return await dialog.ShowDialog<string?>(this);
     }
 
     private async Task<bool> ChooseOutputFolderAsync()
@@ -762,10 +928,22 @@ public partial class MainWindow : Window
     {
         if (_allowClose) return;
         if (_busy) { e.Cancel = true; return; }
-        if (!_tabs.Any(tab => tab.IsDirty) && !_metadataPending) return;
         e.Cancel = true;
-        var close = false;
-        await RunAsync(async () => close = await ConfirmUnsavedAsync());
-        if (close) { _allowClose = true; Close(); }
+        var close = !_tabs.Any(tab => tab.IsDirty) && !_metadataPending;
+        if (!close)
+        {
+            try { await UpdateRecoverySnapshotAsync(); }
+            catch (Exception ex) { Log($"終了前の自動退避に失敗しました: {ex.Message}", true); }
+            await RunAsync(async () => close = await ConfirmUnsavedAsync());
+        }
+        if (!close) return;
+        if (_notesPath != null && !_recoveryDeferred)
+        {
+            try { await _recoveryStore.DeleteAsync(_notesPath); }
+            catch (Exception ex) { Log($"自動退避データを整理できません: {ex.Message}", true); }
+        }
+        _recoveryTimer.Stop();
+        _allowClose = true;
+        Close();
     }
 }
