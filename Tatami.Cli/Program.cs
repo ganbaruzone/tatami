@@ -82,6 +82,14 @@ internal static class TatamiCli
                 Console.WriteLine(Path.GetRelativePath(root, created));
                 return 0;
             }
+            if (positional.Count == 4 && positional[0] == "notes" && positional[1] == "rename")
+            {
+                var root = await ResolveInputAsync(input);
+                var source = ResolveNotePath(root, positional[2]);
+                var renamed = new NoteFileService(root).Rename(source, positional[3]);
+                Console.WriteLine(Path.GetRelativePath(root, renamed));
+                return 0;
+            }
             if (positional.Count == 2 && positional[0] == "notes" && positional[1] == "list")
             {
                 var root = await ResolveInputAsync(input);
@@ -151,6 +159,16 @@ internal static class TatamiCli
         return full;
     }
 
+    private static string ResolveNotePath(string root, string notePath)
+    {
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var fullPath = Path.GetFullPath(Path.Combine(fullRoot, notePath));
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison))
+            throw new InvalidDataException("ノートのパスは入力ディレクトリ内を指定してください。");
+        return fullPath;
+    }
+
     private static int UsageError(string message)
     {
         Console.Error.WriteLine($"引数エラー: {message}");
@@ -165,6 +183,7 @@ tatami {Version}
   tatami [--quiet|--verbose] notes list [--input <dir>]
   tatami [--quiet|--verbose] notes show <path> [--input <dir>]
   tatami [--quiet|--verbose] notes create <name> [--directory <dir>] [--input <dir>]
+  tatami [--quiet|--verbose] notes rename <path> <name> [--input <dir>]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami --help
   tatami --version
@@ -172,6 +191,7 @@ tatami {Version}
 notes list   Markdownノートを再帰的に一覧表示します（公開状態つき）。
 notes show   Front Matterと公開判定を表示します。
 notes create 非公開の新規ノートを作成します。
+notes rename ファイル名を変更します（既存ファイルは上書きしません）。
 build        設定済みビルダーでサイトを生成します。
 --input      対象ノートのディレクトリ（省略時は設定を使用）。
 --output     HTML出力先（省略時は設定を使用）。
