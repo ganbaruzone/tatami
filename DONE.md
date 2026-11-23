@@ -200,3 +200,20 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 - `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 86件成功、失敗0。
 - `git diff --check`: 成功。
 - GUI操作の手動確認はしていません。
+
+## CLIノート操作のリファクタリング完了記録（2026-11-23）
+
+`NotesCommands.cs` のノートコマンド処理を整理。引数の形の検証を入口に集約し、検証後に繰り返していた引数件数・コマンド名の条件判定を削除しました。コマンド別のprivateメソッドへ処理を抽出してネストを1段減らし、不要な引数コピーを削除しました。入力ルートの解決は対応コマンドの検証後に一度だけ行います。公開API、出力、終了コード、ファイル操作の順序は維持しています。
+
+- 変更前の既存テスト82件が成功。追加したCLI回帰テスト25件も、構造変更前に成功を確認。
+- 作成・メタデータ更新・名前変更とリンク更新・ゴミ箱一覧／移動／復元、一覧・表示・検索・公開slug検査、quiet / verbose、不正引数で入力を検証しない動作、非Markdown／欠落ノートの拒否を確認。
+- `dotnet build Tatami.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore`: 107件成功、失敗0・スキップ0。
+- CLI／テストの `dotnet format <project> --no-restore --verify-no-changes --severity info` はCIと同じ診断除外（IDE0039、IDE0305、CA1869、SYSLIB1045、CA1859、CA1826、ASP0015）で成功。
+- アプリ全体の同チェックは、未変更の `AttachmentService.cs` と `NoteLinkService.cs` の既存指摘（WHITESPACE、IDE0042、CA1822）で失敗。診断設定や公開APIは変更していません。
+- `git diff --check`: 成功。GUIの手動操作は対象外。
+
+### 最新mainとの統合確認（2026-11-23）
+
+バックリンク機能とCI修正を含む `05b38aa` にCLI変更を載せ直し、アプリ・CLIのビルド（警告0・エラー0）、全111件の自動テスト、3プロジェクトのCI相当の `dotnet format --verify-no-changes` が成功しました。前述の静的解析の失敗は統合前の結果であり、最新mainでは既存のCI修正により解消されています。`src/AvaloniaEdit/` の差分はありません。
