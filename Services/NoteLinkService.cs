@@ -88,9 +88,23 @@ public sealed class NoteLinkService
             var document = Markdown.Parse(body, Pipeline);
             foreach (var link in FindLinks(document))
             {
-                if (link.IsImage) continue;
                 var url = link.Url;
                 if (string.IsNullOrWhiteSpace(url) || IsExternal(url)) continue;
+                if (AttachmentService.TryGetManagedPath(root, sourcePath, url, out var attachmentPath))
+                {
+                    string? attachmentError = null;
+                    try
+                    {
+                        PathSafety.RejectLinks(attachmentPath);
+                        if (!AttachmentService.IsSupported(attachmentPath)) attachmentError = "添付できないファイル形式です";
+                        else if (!File.Exists(attachmentPath)) attachmentError = "添付ファイルがありません";
+                    }
+                    catch (IOException) { attachmentError = "添付ファイルのパスにシンボリックリンクがあります"; }
+                    if (attachmentError != null)
+                        results.Add(new BrokenNoteLink(sourcePath, GetLine(body, link.UrlSpan.Start) + frontMatterLineOffset, url, attachmentError));
+                    continue;
+                }
+                if (link.IsImage) continue;
                 if (!TryResolve(root, sourcePath, url, known, out var targetPath, out var fragment, out var reason))
                 {
                     results.Add(new BrokenNoteLink(sourcePath, GetLine(body, link.UrlSpan.Start) + frontMatterLineOffset, url, reason));

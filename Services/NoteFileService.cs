@@ -23,8 +23,9 @@ public sealed partial class NoteFileService
     public NoteFileService(string workspace)
     {
         _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(workspace));
-        if (_root.Split(Path.DirectorySeparatorChar).Any(part => part.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidDataException("Tatamiのゴミ箱をメモのディレクトリには指定できません。");
+        if (_root.Split(Path.DirectorySeparatorChar).Any(part => part.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase)
+            || part.Equals(AttachmentService.FolderName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Tatamiの内部データ領域をメモのディレクトリには指定できません。");
         PathSafety.RejectLinks(_root);
         if (!Directory.Exists(_root)) throw new DirectoryNotFoundException("メモのディレクトリがありません。");
     }
@@ -50,8 +51,9 @@ public sealed partial class NoteFileService
         if (path != _root && !path.StartsWith(_root + Path.DirectorySeparatorChar, comparison))
             throw new InvalidDataException("メモのディレクトリ外は操作できません。");
         if (Path.GetRelativePath(_root, path).Split(Path.DirectorySeparatorChar)
-            .Any(part => part.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidDataException("ゴミ箱内は直接操作できません。復元を使用してください。");
+            .Any(part => part.Equals(TrashFolderName, StringComparison.OrdinalIgnoreCase)
+                || part.Equals(AttachmentService.FolderName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Tatamiの内部データ領域は直接操作できません。");
         PathSafety.RejectLinks(path);
         return path;
     }

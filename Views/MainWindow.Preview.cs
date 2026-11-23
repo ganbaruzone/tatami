@@ -102,8 +102,15 @@ public partial class MainWindow : Window
             if (existingIndex >= 0) notes[existingIndex] = note;
             else notes.Add(note);
             var routes = _noteLinks.BuildPublishedRoutes(notes);
-            var renderer = new TemplateRenderer(Path.Combine(AppContext.BaseDirectory, "Templates", "default.html"), routes, rootRelativeNoteLinks: true);
-            _previewServer.SetLivePreview(renderer.Render(note));
+            var liveAttachments = _attachments.FindReferenced(_notesPath!, note.SourcePath, PrivateContentFilter.Remove(note.Markdown));
+            var assetRoutes = liveAttachments.ToDictionary(
+                asset => Path.GetFullPath(asset.Path),
+                asset => "__tatami_live_assets/" + AttachmentService.LivePreviewToken(asset.Path),
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var renderer = new TemplateRenderer(Path.Combine(AppContext.BaseDirectory, "Templates", "default.html"), routes,
+                assetRoutes, rootRelativeNoteLinks: true);
+            _previewServer.SetLivePreview(renderer.Render(note), liveAttachments.ToDictionary(
+                asset => AttachmentService.LivePreviewToken(asset.Path), asset => asset.Path, StringComparer.Ordinal), _notesPath);
             if (_livePreviewActive)
             {
                 PreviewStatus.Text = "編集中の記事のライブプレビュー";

@@ -19,11 +19,14 @@ public sealed class TemplateRenderer
     private readonly Template _template;
     private readonly MarkdownPipeline _pipeline;
     private readonly IReadOnlyDictionary<string, string> _noteRoutes;
+    private readonly IReadOnlyDictionary<string, string> _assetRoutes;
     private readonly bool _rootRelativeNoteLinks;
 
-    public TemplateRenderer(string templatePath, IReadOnlyDictionary<string, string>? noteRoutes = null, bool rootRelativeNoteLinks = false)
+    public TemplateRenderer(string templatePath, IReadOnlyDictionary<string, string>? noteRoutes = null,
+        IReadOnlyDictionary<string, string>? assetRoutes = null, bool rootRelativeNoteLinks = false)
     {
         _noteRoutes = noteRoutes ?? new Dictionary<string, string>();
+        _assetRoutes = assetRoutes ?? new Dictionary<string, string>();
         _rootRelativeNoteLinks = rootRelativeNoteLinks;
         _template = Template.Parse(File.ReadAllText(templatePath), templatePath);
         if (_template.HasErrors) throw new InvalidDataException(_template.Messages.ToString());
@@ -64,7 +67,8 @@ public sealed class TemplateRenderer
                     Uri.UnescapeDataString(pathPart).Replace('/', Path.DirectorySeparatorChar)));
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException) { return url; }
-        if (!_noteRoutes.TryGetValue(targetPath, out var targetRoute)) return url;
+        if (!_noteRoutes.TryGetValue(targetPath, out var targetRoute)
+            && !_assetRoutes.TryGetValue(targetPath, out targetRoute)) return url;
 
         var currentRoute = _noteRoutes.TryGetValue(Path.GetFullPath(note.SourcePath), out var publishedRoute)
             ? publishedRoute

@@ -24,6 +24,9 @@ public sealed class NoteRepository
         if (Path.GetFullPath(inputPath).Split(Path.DirectorySeparatorChar)
             .Any(part => part.Equals(NoteFileService.TrashFolderName, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Tatamiのゴミ箱はビルド対象にできません。");
+        if (Path.GetFullPath(inputPath).Split(Path.DirectorySeparatorChar)
+            .Any(part => part.Equals(AttachmentService.FolderName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Tatamiの添付ファイル領域はビルド入力にできません。");
         foreach (var file in Enumerate(inputPath, outputPath, excludedPaths))
         {
             Note note;
@@ -44,7 +47,7 @@ public sealed class NoteRepository
             if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
             if ((attributes & FileAttributes.Directory) != 0)
             {
-                if (Path.GetFileName(entry) is ".git" or "node_modules" or ".astro" or ".tatami-trash") continue;
+                if (Path.GetFileName(entry) is ".git" or "node_modules" or ".astro" or ".tatami-trash" or AttachmentService.FolderName) continue;
                 foreach (var child in Enumerate(entry, outputPath, excludedPaths)) yield return child;
             }
             else if (string.Equals(Path.GetExtension(entry), ".md", StringComparison.OrdinalIgnoreCase))

@@ -23,6 +23,8 @@ public sealed class PreviewServer : IAsyncDisposable
     private HashSet<string> _generated = new(StringComparer.Ordinal);
     private string? _liveHtml;
     private const string LivePreviewPath = "/__tatami_live/index.html";
+    private const string LiveAssetPrefix = "/__tatami_live_assets/";
+    private IReadOnlyDictionary<string, string> _liveAssets = new Dictionary<string, string>();
     public Uri? BaseUri { get; private set; }
 
     public async Task StartAsync(string output)
@@ -45,6 +47,8 @@ public sealed class PreviewServer : IAsyncDisposable
         builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
         var app = builder.Build();
         var types = new FileExtensionContentTypeProvider();
+        types.Mappings[".avif"] = "image/avif";
+        types.Mappings[".ogg"] = "audio/ogg";
         app.Run(async context =>
         {
             if (BaseUri == null || context.Request.Host.Value != BaseUri.Authority
@@ -57,6 +61,23 @@ public sealed class PreviewServer : IAsyncDisposable
                 context.Response.ContentType = "text/html; charset=utf-8";
                 context.Response.ContentLength = System.Text.Encoding.UTF8.GetByteCount(liveHtml);
                 if (context.Request.Method != "HEAD") await context.Response.WriteAsync(liveHtml);
+                return;
+            }
+            if (context.Request.Path.Value is { } requestPath && requestPath.StartsWith(LiveAssetPrefix, StringComparison.Ordinal))
+            {
+                var token = requestPath[LiveAssetPrefix.Length..];
+                if (token.Length != 24 || !_liveAssets.TryGetValue(token, out var assetPath)
+                    || !AttachmentService.IsSupported(assetPath))
+                { context.Response.StatusCode = 404; return; }
+                try { PathSafety.RejectLinks(assetPath); }
+                catch (IOException) { context.Response.StatusCode = 404; return; }
+                if (!File.Exists(assetPath) || new FileInfo(assetPath).Length > AttachmentService.MaximumFileSizeBytes)
+                { context.Response.StatusCode = 404; return; }
+                context.Response.Headers.CacheControl = "no-store";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.ContentType = types.TryGetContentType(assetPath, out var assetContentType) ? assetContentType : "application/octet-stream";
+                context.Response.ContentLength = new FileInfo(assetPath).Length;
+                if (context.Request.Method != "HEAD") await context.Response.SendFileAsync(assetPath);
                 return;
             }
             var path = Resolve(context.Request.Path.Value ?? "/");
@@ -97,7 +118,30 @@ public sealed class PreviewServer : IAsyncDisposable
         return new Uri(BaseUri, string.Join('/', relative.Split('/').Select(Uri.EscapeDataString)));
     }
 
-    public void SetLivePreview(string html) => _liveHtml = html;
+    public void SetLivePreview(string html, IReadOnlyDictionary<string, string>? assets = null, string? workspaceRoot = null)
+    {
+        if (assets is null || assets.Count == 0)
+        {
+            _liveHtml = html;
+            _liveAssets = new Dictionary<string, string>();
+            return;
+        }
+        if (workspaceRoot is null) throw new InvalidDataException("ライブプレビューの添付ファイルにはメモのディレクトリが必要です。");
+        var validated = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (token, path) in assets)
+        {
+            if (token != AttachmentService.LivePreviewToken(path)
+                || !AttachmentService.IsManagedPath(workspaceRoot, path)
+                || !AttachmentService.IsSupported(path))
+                throw new InvalidDataException("ライブプレビューの添付ファイルが許可された範囲外です。");
+            PathSafety.RejectLinks(path);
+            if (!File.Exists(path) || new FileInfo(path).Length > AttachmentService.MaximumFileSizeBytes)
+                throw new InvalidDataException("ライブプレビューの添付ファイルがありません、または大きすぎます。");
+            validated.Add(token, Path.GetFullPath(path));
+        }
+        _liveHtml = html;
+        _liveAssets = validated;
+    }
 
     public Uri GetLivePreviewUri()
     {
@@ -117,5 +161,6 @@ public sealed class PreviewServer : IAsyncDisposable
         BaseUri = null;
         _root = null;
         _liveHtml = null;
+        _liveAssets = new Dictionary<string, string>();
     }
 }

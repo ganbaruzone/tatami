@@ -55,6 +55,25 @@ public sealed class ExternalBuildTests : IDisposable
         Assert.Equal("/", Assert.Single(await PreviewCatalog.ReadAsync(_output)).Name);
     }
 
+    [Fact]
+    public async Task ExternalBuildIncludesOnlyPublicReferencedAttachments()
+    {
+        var assetDirectory = Path.Combine(_notes, AttachmentService.FolderName);
+        Directory.CreateDirectory(assetDirectory);
+        var publicAsset = Path.Combine(assetDirectory, "public.png");
+        var privateAsset = Path.Combine(assetDirectory, "private.png");
+        File.WriteAllBytes(publicAsset, [11, 12, 13]);
+        File.WriteAllBytes(privateAsset, [21, 22, 23]);
+        File.WriteAllText(Path.Combine(_notes, "public.md"), "---\npublish: true\ntitle: Public\n---\nVISIBLE\n![Public](.tatami-assets/public.png)\n");
+        File.WriteAllText(Path.Combine(_notes, "private.md"), "---\npublish: false\n---\n![Private](.tatami-assets/private.png)\n");
+
+        await BuildCoordinator.BuildAsync(Config());
+
+        Assert.Equal(new byte[] { 11, 12, 13 }, await File.ReadAllBytesAsync(Path.Combine(_output, "assets", "public.png")));
+        Assert.False(File.Exists(Path.Combine(_output, "assets", "private.png")));
+        Assert.Contains("../assets/public.png", await File.ReadAllTextAsync(Path.Combine(_output, "index.html")));
+    }
+
     [Theory]
     [InlineData("fail")]
     [InlineData("empty")]

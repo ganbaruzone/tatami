@@ -77,6 +77,39 @@ public sealed class SiteBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task PublishesOnlyAttachmentsReferencedByPublicContent()
+    {
+        var assetRoot = Path.Combine(_input, AttachmentService.FolderName);
+        Directory.CreateDirectory(assetRoot);
+        var publicAsset = Path.Combine(assetRoot, "public.png");
+        var privateAsset = Path.Combine(assetRoot, "private.png");
+        var orphanAsset = Path.Combine(assetRoot, "orphan.png");
+        File.WriteAllBytes(publicAsset, [1, 2, 3]);
+        File.WriteAllBytes(privateAsset, [4, 5, 6]);
+        File.WriteAllBytes(orphanAsset, [7, 8, 9]);
+        Note("article.md", "---\npublish: true\n---\n![Public](.tatami-assets/public.png)\n\n::: private\n![Private](.tatami-assets/private.png)\n:::\n");
+        Note("private-note.md", "---\npublish: false\n---\n![Private](.tatami-assets/private.png)\n");
+
+        await _builder.BuildAsync(_input, _output);
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(Path.Combine(_output, "assets", "public.png")));
+        Assert.False(File.Exists(Path.Combine(_output, "assets", "private.png")));
+        Assert.False(File.Exists(Path.Combine(_output, "assets", "orphan.png")));
+        Assert.Contains("src=\"../assets/public.png\"", Html("article"));
+        Assert.DoesNotContain("private.png", Html("article"));
+    }
+
+    [Fact]
+    public async Task MissingPublicAttachmentStopsBuildBeforeChangingOutput()
+    {
+        Note("article.md", "---\npublish: true\n---\n![Missing](.tatami-assets/missing.png)\n");
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => _builder.BuildAsync(_input, _output));
+
+        Assert.False(Directory.Exists(_output));
+    }
+
+    [Fact]
     public async Task DuplicateSlugLeavesPublishedSiteUnchanged()
     {
         Note("one.md", "---\npublish: true\nslug: same\n---\nOriginal");

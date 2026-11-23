@@ -34,8 +34,27 @@ public sealed class SiteBuilder(string? templateDirectory = null)
         PathSafety.RejectLinks(output);
         var notes = new NoteRepository().ReadAll(input, output).ToArray();
         var routes = new NoteLinkService().BuildPublishedRoutes(notes);
-        var renderer = new TemplateRenderer(Path.Combine(_templates, "default.html"), routes);
         var generated = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var assetRoutes = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var assetOwners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var attachments = new AttachmentService();
+        foreach (var note in notes.Where(PublishFilter.IsPublic))
+        {
+            var publicMarkdown = PrivateContentFilter.Remove(note.Markdown);
+            foreach (var asset in attachments.FindReferenced(input, note.SourcePath, publicMarkdown))
+            {
+                if (assetOwners.TryGetValue(asset.OutputPath, out var owner)
+                    && !string.Equals(owner, asset.Path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    throw new InvalidDataException($"添付ファイルの出力先が重複しています: {asset.OutputPath}");
+                assetOwners[asset.OutputPath] = asset.Path;
+                var bytes = File.ReadAllBytes(asset.Path);
+                if (generated.TryGetValue(asset.OutputPath, out var existing) && !existing.AsSpan().SequenceEqual(bytes))
+                    throw new InvalidDataException($"添付ファイルの出力先が重複しています: {asset.OutputPath}");
+                generated[asset.OutputPath] = bytes;
+                assetRoutes[asset.Path] = asset.OutputPath;
+            }
+        }
+        var renderer = new TemplateRenderer(Path.Combine(_templates, "default.html"), routes, assetRoutes);
         var published = 0;
         var unpublished = 0;
         foreach (var note in notes)

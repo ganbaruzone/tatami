@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<OpenNoteTab, TextBlock> _tabLabels = [];
     private readonly Dictionary<OpenNoteTab, Border> _tabBorders = [];
     private readonly NoteLinkService _noteLinks = new();
+    private readonly AttachmentService _attachments = new();
     private OpenNoteTab? _activeTab;
     private EditorBuffer? _buffer;
     private WorkspaceEntry? _selected;
@@ -443,6 +444,35 @@ public partial class MainWindow : Window
         Editor.TextArea.Focus();
     }
 
+    private async Task ImportAttachmentAsync()
+    {
+        if (_notesPath == null || _buffer == null)
+        {
+            Log("先に添付先のノートを開いてください。", true);
+            return;
+        }
+        var selected = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "画像または添付ファイルを選択",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("画像・添付ファイル")
+                {
+                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.avif", "*.bmp", "*.pdf", "*.mp3", "*.wav", "*.ogg", "*.mp4", "*.webm"]
+                }
+            ]
+        });
+        if (selected.Count == 0) return;
+        var source = selected[0].TryGetLocalPath() ?? throw new IOException("ローカルファイルを選択してください。");
+        var imported = await Task.Run(() => _attachments.Import(_notesPath, _buffer.Path, source));
+        var selection = Editor.TextArea.Selection.SurroundingSegment;
+        Editor.Document.Replace(selection.Offset, selection.Length, imported.Markdown);
+        Editor.TextArea.Caret.Offset = selection.Offset + imported.Markdown.Length;
+        Editor.TextArea.Focus();
+        Log($"添付ファイルを取り込みました: {imported.RelativePath}");
+    }
+
     private async Task ApplyRenameReferenceUpdatesAsync(
         IReadOnlyDictionary<string, string> changes, string oldPath, OpenNoteTab renamedTab)
     {
@@ -489,6 +519,8 @@ public partial class MainWindow : Window
     private async void InsertNoteLink(object? sender, RoutedEventArgs e) => await RunAsync(InsertNoteLinkAsync);
 
     private async void CheckNoteLinks(object? sender, RoutedEventArgs e) => await RunAsync(CheckNoteLinksAsync);
+
+    private async void ImportAttachment(object? sender, RoutedEventArgs e) => await RunAsync(ImportAttachmentAsync);
 
     private async void RenameNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
     {

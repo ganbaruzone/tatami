@@ -42,6 +42,10 @@ public sealed class ExternalSiteBuilder
         {
             var slugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var privateCount = 0;
+            var attachments = new AttachmentService();
+            var publishedAssets = new Dictionary<string, NoteAttachment>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var assetRoutes = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var assetOwners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var excluded = PathSafety.IsWithin(project, input) ? new[] { project } : [];
             foreach (var note in new NoteRepository().ReadAll(input, output, excluded))
             {
@@ -50,6 +54,16 @@ public sealed class ExternalSiteBuilder
                 var slug = note.Metadata.Slug is null ? PathSafety.FileSlug(Path.GetFileNameWithoutExtension(note.SourcePath)) : PathSafety.Slug(note.Metadata.Slug);
                 if (!slugs.Add(slug)) throw new InvalidDataException($"slugが重複しています: {slug}");
                 var body = PrivateContentFilter.Remove(note.Markdown);
+                foreach (var asset in attachments.FindReferenced(input, note.SourcePath, body))
+                {
+                    if (assetOwners.TryGetValue(asset.OutputPath, out var owner)
+                        && !string.Equals(owner, asset.Path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                        throw new InvalidDataException($"添付ファイルの出力先が重複しています: {asset.OutputPath}");
+                    assetOwners[asset.OutputPath] = asset.Path;
+                    publishedAssets[asset.Path] = asset;
+                    assetRoutes[asset.Path] = asset.OutputPath;
+                }
+                body = attachments.RewriteManagedLinksForOutput(input, note.SourcePath, body, $"{slug}/index.html", assetRoutes);
                 // Keep custom front matter for the user's generator. Original notes are never changed.
                 await File.WriteAllTextAsync(Path.Combine(content, slug + ".md"), $"---\n{note.FrontMatter}---\n{body}", cancellationToken);
             }
@@ -96,6 +110,14 @@ public sealed class ExternalSiteBuilder
             ReadGenerated(generatedOutput, generatedOutput, generated, cancellationToken);
             if (!generated.Keys.Any(path => path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidDataException("生成HTMLがありません。ビルダーが TATAMI_OUTPUT_DIR（または {output}）へ出力するよう設定してください。");
+            foreach (var asset in publishedAssets.Values)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var bytes = await File.ReadAllBytesAsync(asset.Path, cancellationToken);
+                if (generated.TryGetValue(asset.OutputPath, out var existing) && !existing.AsSpan().SequenceEqual(bytes))
+                    throw new InvalidDataException($"添付ファイルの出力先が外部ビルダーの生成物と重複しています: {asset.OutputPath}");
+                generated[asset.OutputPath] = bytes;
+            }
             GeneratedSiteWriter.Publish(output, generated, cancellationToken);
             log?.Report($"生成物 {generated.Count} ファイルを反映しました。");
             return new BuildResult(slugs.Count, privateCount, output);

@@ -84,3 +84,6 @@ Desktop.ini
 
 # Tatami recoverable note trash
 **/.tatami-trash/
+
+# Tatami imported note attachments
+**/.tatami-assets/

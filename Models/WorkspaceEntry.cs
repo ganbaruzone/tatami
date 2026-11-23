@@ -12,7 +12,7 @@ public sealed record WorkspaceEntry(string Name, string FullPath, bool IsDirecto
     public static IReadOnlyList<WorkspaceEntry> Read(string path) => [.. new DirectoryInfo(path)
         .EnumerateFileSystemInfos()
         .Where(info => (info.Attributes & FileAttributes.ReparsePoint) == 0)
-        .Where(info => info is DirectoryInfo ? info.Name is not (".git" or "bin" or "obj" or "node_modules" or ".astro" or ".tatami-trash")
+        .Where(info => info is DirectoryInfo ? info.Name is not (".git" or "bin" or "obj" or "node_modules" or ".astro" or ".tatami-trash" or ".tatami-assets")
             && !File.Exists(System.IO.Path.Combine(info.FullName, ".tatami-manifest.json"))
             : info.Extension.Equals(".md", StringComparison.OrdinalIgnoreCase))
         .OrderByDescending(info => info is DirectoryInfo).ThenBy(info => info.Name, StringComparer.OrdinalIgnoreCase)
