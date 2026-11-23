@@ -234,18 +234,18 @@ public sealed class NoteLinkService
             edits.Add((link.UrlSpan.Start, link.UrlSpan.Length, MakeRelativeUrl(newSourcePath, resolved, link.Url)));
         }
         foreach (var group in Descendants<LinkReferenceDefinitionGroup>(document))
-        foreach (var definition in group.Links.Values)
-        {
-            if (string.IsNullOrWhiteSpace(definition.Url) || !TryLocalTarget(oldSourcePath, definition.Url, out var resolved, out _)) continue;
-            var block = definition.Span;
-            if (block.Start < 0 || block.End >= markdown.Length) continue;
-            var raw = markdown.Substring(block.Start, block.Length);
-            var rawUrl = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
-            var replacement = MakeRelativeUrl(newSourcePath, resolved, definition.Url);
-            if (definition.UrlHasPointyBrackets) replacement = $"<{replacement}>";
-            var relativeStart = raw.IndexOf(rawUrl, StringComparison.Ordinal);
-            if (relativeStart >= 0) edits.Add((block.Start + relativeStart, rawUrl.Length, replacement));
-        }
+            foreach (var definition in group.Links.Values)
+            {
+                if (string.IsNullOrWhiteSpace(definition.Url) || !TryLocalTarget(oldSourcePath, definition.Url, out var resolved, out _)) continue;
+                var block = definition.Span;
+                if (block.Start < 0 || block.End >= markdown.Length) continue;
+                var raw = markdown.Substring(block.Start, block.Length);
+                var rawUrl = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
+                var replacement = MakeRelativeUrl(newSourcePath, resolved, definition.Url);
+                if (definition.UrlHasPointyBrackets) replacement = $"<{replacement}>";
+                var relativeStart = raw.IndexOf(rawUrl, StringComparison.Ordinal);
+                if (relativeStart >= 0) edits.Add((block.Start + relativeStart, rawUrl.Length, replacement));
+            }
         var nonOverlapping = new List<(int Start, int Length, string Value)>();
         var lastStart = markdown.Length;
         foreach (var edit in edits.OrderByDescending(item => item.Start))
@@ -297,20 +297,20 @@ public sealed class NoteLinkService
         var document = Markdown.Parse(markdown, Pipeline);
         var edits = new List<(int Start, int Length, string Value)>();
         foreach (var group in Descendants<LinkReferenceDefinitionGroup>(document))
-        foreach (var definition in group.Links.Values)
-        {
-            if (string.IsNullOrWhiteSpace(definition.Url) || !TryLocalTarget(sourcePath, definition.Url, out var resolved, out _)
-                || !string.Equals(resolved, Path.GetFullPath(oldTargetPath), PathComparison)) continue;
-            var block = definition.Span;
-            if (block.Start < 0 || block.End >= markdown.Length) continue;
-            var raw = markdown.Substring(block.Start, block.Length);
-            var destination = definition.UrlHasPointyBrackets
-                ? $"<{MakeRelativeUrl(sourcePath, newTargetPath, definition.Url)}>"
-                : MakeRelativeUrl(sourcePath, newTargetPath, definition.Url);
-            var rawUrl = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
-            var relativeStart = raw.IndexOf(rawUrl, StringComparison.Ordinal);
-            if (relativeStart >= 0) edits.Add((block.Start + relativeStart, rawUrl.Length, destination));
-        }
+            foreach (var definition in group.Links.Values)
+            {
+                if (string.IsNullOrWhiteSpace(definition.Url) || !TryLocalTarget(sourcePath, definition.Url, out var resolved, out _)
+                    || !string.Equals(resolved, Path.GetFullPath(oldTargetPath), PathComparison)) continue;
+                var block = definition.Span;
+                if (block.Start < 0 || block.End >= markdown.Length) continue;
+                var raw = markdown.Substring(block.Start, block.Length);
+                var destination = definition.UrlHasPointyBrackets
+                    ? $"<{MakeRelativeUrl(sourcePath, newTargetPath, definition.Url)}>"
+                    : MakeRelativeUrl(sourcePath, newTargetPath, definition.Url);
+                var rawUrl = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
+                var relativeStart = raw.IndexOf(rawUrl, StringComparison.Ordinal);
+                if (relativeStart >= 0) edits.Add((block.Start + relativeStart, rawUrl.Length, destination));
+            }
         foreach (var edit in edits.OrderByDescending(item => item.Start))
             markdown = markdown.Remove(edit.Start, edit.Length).Insert(edit.Start, edit.Value);
         return markdown;
