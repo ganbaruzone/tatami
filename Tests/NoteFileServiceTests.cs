@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Tatami.Models;
 using Tatami.Services;
@@ -132,6 +133,27 @@ public sealed class NoteFileServiceTests : IDisposable
     }
 
     [Fact]
+    public void TrashingTrackedNoteShowsGitDeletionAndHidesTrashPayload()
+    {
+        RunGit(_root, "init", "-q");
+        RunGit(_root, "config", "user.name", "Tatami Tests");
+        RunGit(_root, "config", "user.email", "tatami-tests@example.invalid");
+        var path = _files.Create(_notes, "tracked");
+        RunGit(_root, "add", "--", "notes/tracked.md");
+        RunGit(_root, "commit", "-m", "Add note");
+
+        var trash = _files.MoveToTrash(path);
+
+        var status = RunGit(_root, "status", "--short");
+        Assert.Contains(" D notes/tracked.md", status);
+        Assert.DoesNotContain(NoteFileService.TrashFolderName, status);
+        Assert.Contains("/notes/.tatami-trash/", File.ReadAllText(Path.Combine(_root, ".git", "info", "exclude")));
+
+        Assert.Equal(path, _files.Restore(trash.Id));
+        Assert.Equal("", RunGit(_root, "status", "--short"));
+    }
+
+    [Fact]
     public void RejectsSymlinksAndOutsideWorkspace()
     {
         var outside = Path.Combine(_root, "outside");
@@ -165,4 +187,16 @@ public sealed class NoteFileServiceTests : IDisposable
     }
 
     public void Dispose() => Directory.Delete(_root, true);
+
+    private static string RunGit(string directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git") { WorkingDirectory = directory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Gitを起動できません。");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, error);
+        return output;
+    }
 }

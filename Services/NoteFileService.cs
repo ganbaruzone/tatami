@@ -137,6 +137,7 @@ public sealed partial class NoteFileService
     {
         source = CheckNote(source);
         PathSafety.RejectLinks(TrashRoot);
+        GitRepositoryService.EnsureIgnored(_root, TrashRoot);
         var entry = new TrashedNote(Guid.NewGuid().ToString("D"), Path.GetRelativePath(_root, source), DateTimeOffset.UtcNow);
         var directory = Path.Combine(TrashRoot, entry.Id);
         Directory.CreateDirectory(directory);
