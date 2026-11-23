@@ -113,20 +113,20 @@ public sealed class AttachmentService
         document = Markdown.Parse(markdown, Pipeline);
         edits.Clear();
         foreach (var group in DescendantBlocks(document).OfType<LinkReferenceDefinitionGroup>())
-        foreach (var definition in group.Links.Values)
-        {
-            if (string.IsNullOrWhiteSpace(definition.Url)
-                || !TryGetManagedPath(workspace, notePath, definition.Url, out var path)
-                || !assetRoutes.TryGetValue(path, out var route)) continue;
-            var span = definition.Span;
-            if (span.Start < 0 || span.End >= markdown.Length) continue;
-            var raw = markdown.Substring(span.Start, span.Length);
-            var oldDestination = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
-            var newRoute = RelativeOutputUrl(outputPageRoute, route) + UrlSuffix(definition.Url!);
-            var newDestination = definition.UrlHasPointyBrackets ? $"<{newRoute}>" : newRoute;
-            var relativeStart = raw.IndexOf(oldDestination!, StringComparison.Ordinal);
-            if (relativeStart >= 0) edits.Add((span.Start + relativeStart, oldDestination.Length, newDestination));
-        }
+            foreach (var definition in group.Links.Values)
+            {
+                if (string.IsNullOrWhiteSpace(definition.Url)
+                    || !TryGetManagedPath(workspace, notePath, definition.Url, out var path)
+                    || !assetRoutes.TryGetValue(path, out var route)) continue;
+                var span = definition.Span;
+                if (span.Start < 0 || span.End >= markdown.Length) continue;
+                var raw = markdown.Substring(span.Start, span.Length);
+                var oldDestination = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
+                var newRoute = RelativeOutputUrl(outputPageRoute, route) + UrlSuffix(definition.Url!);
+                var newDestination = definition.UrlHasPointyBrackets ? $"<{newRoute}>" : newRoute;
+                var relativeStart = raw.IndexOf(oldDestination!, StringComparison.Ordinal);
+                if (relativeStart >= 0) edits.Add((span.Start + relativeStart, oldDestination.Length, newDestination));
+            }
         return ApplyEdits(markdown, edits);
     }
 
