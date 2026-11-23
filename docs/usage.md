@@ -34,6 +34,7 @@ workspace/
 ```
 
 2つの設定は個別に変更でき、アプリを再起動しても記憶されます。メモのフォルダを変えても出力先は自動変更されません。ビルド前に左側の表示を確認してください。
+設定欄にはフルパスではなくディレクトリ名を表示し、フルパスはその欄のツールチップで確認できます。
 
 設定はOSのユーザー別アプリデータ領域にある `Tatami/workspace.json` にJSONで保存されます。メモのファイルには設定を書き込みません。出力先にメモと同じ場所やその親は指定できません。
 
@@ -57,6 +58,7 @@ workspace/
 ## ノートの作成・名前変更・ゴミ箱
 
 - 左側の「＋ 新規」（⌘N / Ctrl+N）で、選択フォルダにMarkdownを作成します。ファイル選択中はその親フォルダに作成します。新規ノートは `publish: false` です。
+- 同じ名前のファイルやフォルダがある場合は、`あ.md`、`あ2.md`、`あ3.md` のように空いている番号を付けて作成します。
 - 「名前変更」は編集中のファイル名を変更します。未保存の本文とUndo履歴を保持し、同名ファイルは上書きしません。
 - 「ゴミ箱へ」で編集中のノートを移動します。未保存の場合は保存・破棄・キャンセルを選びます。
 - 「復元」から元の場所に戻せます。同名ファイルがある場合は上書きせず中止するので、既存ファイルを名前変更してから復元してください。
@@ -277,7 +279,7 @@ dotnet publish Tatami.Cli/Tatami.Cli.csproj -c Release -o ./artifacts/tatami
 | `tatami notes validate` | 出力を変更せずFront Matter、公開slug重複、公開本文の非公開ブロックを検査 |
 | `tatami notes search <query>` | ファイル名・タイトル・タグ・本文を検索し、本文は相対パスと行番号を表示 |
 | `tatami notes metadata set <path> <key> <value>` | `title`、`publish`、`slug` を変更し、他のFront Matter項目は保持 |
-| `tatami notes create <name>` | 非公開ノート作成。`--directory` で作成先を指定 |
+| `tatami notes create <name>` | 非公開ノート作成。`--directory` で作成先を指定。同名項目があれば番号を付ける |
 | `tatami notes rename <path> <name>` | ノート名変更 |
 | `tatami notes trash <path>` / `trash list` / `restore <id>` | アプリ内ゴミ箱への移動・一覧・復元 |
 | `tatami config show` / `set <key> <value>` | 設定確認・変更。外部設定キーは `external.project`、`external.executable`、`external.arguments`、`external.timeout` |

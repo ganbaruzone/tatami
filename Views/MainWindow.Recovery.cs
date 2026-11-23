@@ -75,7 +75,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(config.OutputPath))
         {
             _outputPath = Path.GetFullPath(config.OutputPath);
-            OutputPathLabel.Text = _outputPath;
+            OutputPathLabel.Text = DisplayDirectoryName(_outputPath);
             ToolTip.SetTip(OutputPathLabel, _outputPath);
         }
         if (Directory.Exists(config.InputPath))

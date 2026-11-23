@@ -256,7 +256,7 @@ public partial class MainWindow : Window
         FolderLabel.Text = Path.GetFileName(path);
         Breadcrumb.Text = "Tatami  /  Markdown editor";
         UpdateBufferStatus();
-        NotesPathLabel.Text = path;
+        NotesPathLabel.Text = DisplayDirectoryName(path);
         ToolTip.SetTip(NotesPathLabel, path);
         EditingPane.IsVisible = true;
         PreviewPane.IsVisible = false;

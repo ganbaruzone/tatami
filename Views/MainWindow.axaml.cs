@@ -33,6 +33,12 @@ public partial class MainWindow : Window
     private bool _busy;
     private bool _allowClose;
 
+    private static string DisplayDirectoryName(string path)
+    {
+        var directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+        return string.IsNullOrEmpty(directoryName) ? Path.GetPathRoot(path) ?? path : directoryName;
+    }
+
     public MainWindow()
     {
         InitializeComponent();

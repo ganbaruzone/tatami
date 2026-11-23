@@ -29,7 +29,7 @@ public partial class MainWindow : Window
             throw new IOException("メモと同じディレクトリや、その親をHTML出力先には指定できません。");
         PathSafety.RejectLinks(path);
         _outputPath = path;
-        OutputPathLabel.Text = path;
+        OutputPathLabel.Text = DisplayDirectoryName(path);
         ToolTip.SetTip(OutputPathLabel, path);
         // Clear stale pages from a previously selected output directory.
         _refreshingPages = true;

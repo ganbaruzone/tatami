@@ -21,14 +21,21 @@ public sealed class NoteFileServiceTests : IDisposable
     }
 
     [Fact]
-    public void CreatesPrivateMarkdownAndNeverOverwrites()
+    public void CreatesPrivateMarkdownAndAddsNumberWhenNameExists()
     {
         var path = _files.Create(_notes, "日本語 note");
         Assert.Equal("日本語 note.md", Path.GetFileName(path));
         Assert.False(new NoteRepository().Parse(path, File.ReadAllText(path)).Metadata.Publish);
         File.WriteAllText(path, "original");
-        Assert.Throws<IOException>(() => _files.Create(_notes, "日本語 note.md"));
+
+        var second = _files.Create(_notes, "日本語 note.md");
+        var third = _files.Create(_notes, "日本語 note.md");
+
+        Assert.Equal("日本語 note2.md", Path.GetFileName(second));
+        Assert.Equal("日本語 note3.md", Path.GetFileName(third));
         Assert.Equal("original", File.ReadAllText(path));
+        Assert.False(new NoteRepository().Parse(second, File.ReadAllText(second)).Metadata.Publish);
+        Assert.False(new NoteRepository().Parse(third, File.ReadAllText(third)).Metadata.Publish);
     }
 
     [Fact]

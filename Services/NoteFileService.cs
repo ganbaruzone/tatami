@@ -79,12 +79,36 @@ public sealed partial class NoteFileService
     {
         directory = CheckPath(directory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("作成先フォルダがありません。");
-        var path = CheckPath(Path.Combine(directory, NormalizeName(name)));
-        EnsureAvailable(path);
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-        writer.Write(contents ?? "---\npublish: false\n---\n\n");
-        return path;
+        var requestedName = NormalizeName(name);
+        var stem = Path.GetFileNameWithoutExtension(requestedName);
+        var extension = Path.GetExtension(requestedName);
+        var existingNames = Directory.EnumerateFileSystemEntries(directory)
+            .Select(entry => Path.GetFileName(entry).Normalize(NormalizationForm.FormC))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var suffix = 1; ; suffix++)
+        {
+            var candidateName = suffix == 1 ? requestedName : $"{stem}{suffix}{extension}";
+            if (candidateName.Length > 120)
+                throw new IOException("同名のファイルまたはフォルダが存在し、番号付きの名前を作成できません。");
+            if (!existingNames.Add(candidateName.Normalize(NormalizationForm.FormC))) continue;
+
+            var path = CheckPath(Path.Combine(directory, candidateName));
+            FileStream stream;
+            try
+            {
+                stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            }
+            catch (IOException) when (File.Exists(path) || Directory.Exists(path))
+            {
+                continue;
+            }
+
+            using (stream)
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                writer.Write(contents ?? "---\npublish: false\n---\n\n");
+            return path;
+        }
     }
 
     public string Rename(string source, string name)
