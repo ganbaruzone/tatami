@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _slashCommandPalette = new SlashCommandPalette(InsertSlashCommand);
         SearchPanel.Install(Editor);
         using (var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Tatami/Assets/Markdown.xshd")))
         using (var reader = XmlReader.Create(stream))
@@ -51,7 +52,9 @@ public partial class MainWindow : Window
                 LoadMetadataSettings(Editor.Text);
             UpdateBufferStatus();
             if (PreviewPane.IsVisible) RequestLivePreviewRefresh();
+            if (_slashCommandPalette.IsOpen) RefreshSlashCommandPalette();
         };
+        Editor.TextArea.TextEntered += OnEditorTextEntered;
         MetadataPublish.PropertyChanged += (_, e) =>
         {
             if (e.Property.Name == nameof(MetadataPublish.IsChecked)) MetadataSettingChanged(MetadataPublish, EventArgs.Empty);
@@ -59,7 +62,10 @@ public partial class MainWindow : Window
         MetadataTitle.TextChanged += MetadataSettingChanged;
         MetadataSlug.TextChanged += MetadataSettingChanged;
         Editor.TextArea.Caret.PositionChanged += (_, _) =>
+        {
             CursorStatus.Text = $"行 {Editor.TextArea.Caret.Line}, 列 {Editor.TextArea.Caret.Column}";
+            if (_slashCommandPalette.IsOpen) RefreshSlashCommandPalette();
+        };
         AddHandler(KeyDownEvent, HandleShortcut, RoutingStrategies.Tunnel);
         Closing += OnClosing;
         _recoveryTimer.Tick += async (_, _) => await BackupTickAsync();
@@ -73,6 +79,7 @@ public partial class MainWindow : Window
 
     private async void HandleShortcut(object? sender, KeyEventArgs e)
     {
+        if (HandleSlashCommandKey(e)) return;
         var modifier = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
         if (e.Key == Key.N && e.KeyModifiers == modifier)
         {
