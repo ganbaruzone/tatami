@@ -75,7 +75,7 @@ public sealed partial class NoteFileService
             throw new IOException("同名のファイルまたはフォルダが存在します。別の名前を指定してください。");
     }
 
-    public string Create(string directory, string name)
+    public string Create(string directory, string name, string? contents = null)
     {
         directory = CheckPath(directory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("作成先フォルダがありません。");
@@ -83,7 +83,7 @@ public sealed partial class NoteFileService
         EnsureAvailable(path);
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-        writer.Write("---\npublish: false\n---\n\n");
+        writer.Write(contents ?? "---\npublish: false\n---\n\n");
         return path;
     }
 

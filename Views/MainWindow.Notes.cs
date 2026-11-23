@@ -530,7 +530,11 @@ public partial class MainWindow : Window
             : _notesPath!;
         var name = await NoteDialogs.Name("新規Markdownノート", "無題.md", directory).ShowDialog<string?>(this);
         if (name == null) return;
-        var path = await Task.Run(() => new NoteFileService(_notesPath!).Create(directory, name));
+        var templateId = await new NoteTemplatePickerWindow().ShowForAsync(this);
+        if (templateId == null) return;
+        var title = Path.GetFileNameWithoutExtension(name);
+        var contents = new NoteTemplateService().Render(templateId, title, DateOnly.FromDateTime(DateTime.Today));
+        var path = await Task.Run(() => new NoteFileService(_notesPath!).Create(directory, name, contents));
         await OpenTabAsync(path);
         Editor.TextArea.Focus();
         Log($"新規ノートを作成しました（非公開）: {path}");
