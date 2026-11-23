@@ -202,6 +202,26 @@ public sealed class SiteBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task ExistingHtmlIsOverwrittenEvenWhenUnownedOrManuallyEdited()
+    {
+        Note("a.md", "---\npublish: true\n---\noriginal");
+        var html = Path.Combine(_output, "a", "index.html");
+        Directory.CreateDirectory(Path.GetDirectoryName(html)!);
+        File.WriteAllText(html, "unowned HTML");
+
+        await _builder.BuildAsync(_input, _output);
+        Assert.Contains("original", File.ReadAllText(html));
+        Assert.DoesNotContain("unowned HTML", File.ReadAllText(html));
+
+        File.WriteAllText(html, "manual edit");
+        Note("a.md", "---\npublish: true\n---\nupdated source");
+        await _builder.BuildAsync(_input, _output);
+
+        Assert.Contains("updated source", File.ReadAllText(html));
+        Assert.DoesNotContain("manual edit", File.ReadAllText(html));
+    }
+
+    [Fact]
     public async Task InvalidFrontMatterPreservesPreviousOutput()
     {
         Note("a.md", "---\npublish: true\n---\nOriginal");

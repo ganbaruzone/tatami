@@ -29,7 +29,8 @@ internal static class GeneratedSiteWriter
         }
         var touched = old.Keys.Union(generated.Keys, StringComparer.OrdinalIgnoreCase).ToArray();
         var backups = new Dictionary<string, byte[]?>();
-        // Validate every target before changing any output. Only unchanged, owned files may be replaced/deleted.
+        // Validate every target before changing any output. Generated HTML may replace an existing file;
+        // other output and stale files remain protected unless they are unchanged and Tatami-owned.
         foreach (var relative in touched)
         {
             var path = PathSafety.OutputFile(output, relative);
@@ -38,7 +39,12 @@ internal static class GeneratedSiteWriter
             {
                 var bytes = File.ReadAllBytes(path);
                 if (!old.TryGetValue(relative, out var expected) || Hash(bytes) != expected)
-                    throw new IOException($"既存ファイルを保護するためビルドを中止しました: {path}");
+                {
+                    var isGeneratedHtml = generated.ContainsKey(relative)
+                        && (Path.GetExtension(relative).Equals(".html", StringComparison.OrdinalIgnoreCase)
+                            || Path.GetExtension(relative).Equals(".htm", StringComparison.OrdinalIgnoreCase));
+                    if (!isGeneratedHtml) throw new IOException($"既存ファイルを保護するためビルドを中止しました: {path}");
+                }
                 backups[path] = bytes;
             }
             else backups[path] = null;
