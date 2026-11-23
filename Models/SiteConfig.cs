@@ -9,6 +9,7 @@ public sealed record SiteConfig(string InputPath, string OutputPath)
 {
     public string Builder { get; init; } = "builtin";
     public ExternalBuildOptions External { get; init; } = new();
+    public SiteArchiveOptions Archives { get; init; } = new();
 
     public static async Task<SiteConfig> LoadAsync(string path) =>
         JsonSerializer.Deserialize<SiteConfig>(await File.ReadAllTextAsync(path))
@@ -16,6 +17,15 @@ public sealed record SiteConfig(string InputPath, string OutputPath)
 
     public Task SaveAsync(string path) => File.WriteAllTextAsync(path,
         JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+public sealed record SiteArchiveOptions
+{
+    public string IndexPath { get; init; } = "index.html";
+    public string TagDirectory { get; init; } = "tags";
+    public string DateDirectory { get; init; } = "archives";
+    public string SortBy { get; init; } = "date";
+    public bool Descending { get; init; } = true;
 }
 
 public sealed record ExternalBuildOptions

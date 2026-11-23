@@ -44,6 +44,29 @@ public sealed class SiteBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task GeneratesPublicIndexTagAndYearArchivesWithConfiguredOrderAndPaths()
+    {
+        Note("first.md", "---\ntitle: First\ndate: 2025-04-01\ntags: [CSharp]\npublish: true\n---\nfirst");
+        Note("second.md", "---\ntitle: Second\ndate: 2026-03-01\ntags: [CSharp, Notes]\npublish: true\n---\nsecond");
+        Note("private.md", "---\ntitle: Hidden\ntags: [CSharp]\npublish: false\n---\nhidden");
+
+        await _builder.BuildAsync(new SiteConfig(_input, _output)
+        {
+            Archives = new SiteArchiveOptions { IndexPath = "articles.html", TagDirectory = "by-tag", DateDirectory = "by-year", SortBy = "date", Descending = true }
+        });
+
+        var index = File.ReadAllText(Path.Combine(_output, "articles.html"));
+        var tag = File.ReadAllText(Path.Combine(_output, "by-tag", "CSharp", "index.html"));
+        var year = File.ReadAllText(Path.Combine(_output, "by-year", "2026", "index.html"));
+        Assert.True(index.IndexOf("Second", StringComparison.Ordinal) < index.IndexOf("First", StringComparison.Ordinal));
+        Assert.DoesNotContain("Hidden", index);
+        Assert.DoesNotContain("Hidden", tag);
+        Assert.Contains("first/index.html", tag);
+        Assert.Contains("second/index.html", year);
+        Assert.DoesNotContain("first/index.html", year);
+    }
+
+    [Fact]
     public async Task RendersMetadataTablesCodeAndEscapesHtml()
     {
         Note("a.md", "---\ntitle: '<script>alert(1)</script> & title'\ndate: 2026-11-22\ntags: [CSharp, '<img onerror=alert(1)>']\npublish: true\nslug: custom\n---\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```cs\nvar x = 1;\n```\n\n<script>alert(2)</script>\n\nhello **world**\n\n[bad](javascript:alert%281%29)\n\ntext{onclick=alert(3)}");

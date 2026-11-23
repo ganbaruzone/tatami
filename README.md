@@ -86,6 +86,7 @@ slug: hello
 - `slug` 未指定時はファイル名の空白をハイフンに置換します。文字・数字・`_`・`-` のみ100文字以内で、日本語も使えます。Windows予約名は拒否します。明示的な空slugはエラーです。
 - 同一slugは大文字・小文字やUnicode正規化を考慮して重複エラーにします。既存slugの大文字・小文字だけを変更する場合も、安全のためエラーにします。別のslugまたは新しい出力先を使ってください。
 - 出力は `{slug}/index.html` と `style.css`。CSSへの相対パスは `../style.css` なので直接HTMLを開けます。
+- 内蔵ビルダーは公開ノートだけを載せた記事一覧 `index.html`、タグ別の `tags/<tag>/index.html`、年別の `archives/<year>/index.html` を生成します。`SiteConfig` の `archives` で出力先と並び替え（`date`、`title`、`path`、昇順／降順）を設定できます。設定を省略した場合は日付の降順です。
 - リポジトリ直下の `site-output/` は `.gitignore` 対象です。別の出力先を使う場合は、そのパスもGitの除外設定に追加してください。
 
 ## ノートの作成・名前変更・ゴミ箱

@@ -38,8 +38,8 @@ public sealed class PreviewAndSettingsTests : IDisposable
         await File.WriteAllTextAsync(source, markdown);
         await new SiteBuilder().BuildAsync(notes, site);
         var pages = await PreviewCatalog.ReadAsync(site);
-        var page = Assert.Single(pages);
-        Assert.Equal("guide", page.Name);
+        Assert.Equal(2, pages.Count);
+        var page = Assert.Single(pages, item => item.Name == "guide");
         var html = await File.ReadAllTextAsync(page.FullPath);
         Assert.DoesNotContain("SECRET", html);
         Assert.Contains("Visible", html);
@@ -49,7 +49,7 @@ public sealed class PreviewAndSettingsTests : IDisposable
         Assert.False(PreviewCatalog.CanNavigate(new Uri(source), site));
         Assert.False(PreviewCatalog.CanNavigate(new Uri("https://example.com"), site));
         await File.WriteAllTextAsync(Path.Combine(site, "unowned.html"), "not generated");
-        Assert.Single(await PreviewCatalog.ReadAsync(site));
+        Assert.Equal(2, (await PreviewCatalog.ReadAsync(site)).Count);
         await File.WriteAllTextAsync(source, markdown + "\n:::private\nUNCLOSED");
         await Assert.ThrowsAsync<InvalidDataException>(() => new SiteBuilder().BuildAsync(notes, site));
         Assert.Equal(html, await File.ReadAllTextAsync(page.FullPath));

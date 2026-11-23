@@ -15,16 +15,19 @@ public sealed class SiteBuilder(string? templateDirectory = null)
     private readonly string _templates = templateDirectory ?? Path.Combine(AppContext.BaseDirectory, "Templates");
 
     public Task<BuildResult> BuildAsync(SiteConfig config, CancellationToken cancellationToken = default) =>
-        BuildAsync(config.InputPath, config.OutputPath, cancellationToken);
+        BuildAsync(config.InputPath, config.OutputPath, config.Archives, cancellationToken);
 
-    public async Task<BuildResult> BuildAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    public Task<BuildResult> BuildAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
+        BuildAsync(inputPath, outputPath, new SiteArchiveOptions(), cancellationToken);
+
+    private async Task<BuildResult> BuildAsync(string inputPath, string outputPath, SiteArchiveOptions archives, CancellationToken cancellationToken)
     {
         await BuildLock.WaitAsync(cancellationToken);
-        try { return await Task.Run(() => Build(inputPath, outputPath, cancellationToken), cancellationToken); }
+        try { return await Task.Run(() => Build(inputPath, outputPath, archives, cancellationToken), cancellationToken); }
         finally { BuildLock.Release(); }
     }
 
-    private BuildResult Build(string inputPath, string outputPath, CancellationToken cancellationToken)
+    private BuildResult Build(string inputPath, string outputPath, SiteArchiveOptions archives, CancellationToken cancellationToken)
     {
         var input = Path.TrimEndingDirectorySeparator(Path.GetFullPath(inputPath));
         var output = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputPath));
@@ -69,6 +72,7 @@ public sealed class SiteBuilder(string? templateDirectory = null)
                 throw new InvalidDataException($"slugが重複しています: {slug}");
             published++;
         }
+        ArchivePageGenerator.Add(notes.Where(PublishFilter.IsPublic).ToArray(), routes, archives, generated, output);
         generated.Add("style.css", File.ReadAllBytes(Path.Combine(_templates, "style.css")));
         GeneratedSiteWriter.Publish(output, generated, cancellationToken);
         return new BuildResult(published, unpublished, output);
