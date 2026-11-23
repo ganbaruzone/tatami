@@ -139,5 +139,99 @@ public sealed class AttachmentServiceTests : IDisposable
         Assert.Equal(System.Net.HttpStatusCode.NotFound, missing.StatusCode);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("?download=1")]
+    [InlineData("#page=2")]
+    [InlineData("?download=1#page=2")]
+    public void ResolvesEncodedNestedPathsAndPreservesSuffixes(string suffix)
+    {
+        var note = Path.Combine(_notes, "nested", "note.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(note)!);
+        var asset = Path.Combine(_notes, AttachmentService.FolderName, "日本 語.pdf");
+        Directory.CreateDirectory(Path.GetDirectoryName(asset)!);
+        File.WriteAllText(asset, "pdf");
+        var url = "../.tatami-assets/" + Uri.EscapeDataString("日本 語.pdf") + suffix;
+        var markdown = $"[first](<{url}>)\n[second](<{url}>)\n";
+
+        Assert.True(AttachmentService.TryGetManagedPath(_notes, note, url, out var resolved));
+        Assert.Equal(asset, resolved);
+        Assert.Equal(new NoteAttachment(asset, "assets/日本 語.pdf"),
+            Assert.Single(_attachments.FindReferenced(_notes, note, markdown)));
+        var routes = new Dictionary<string, string> { [asset] = "assets/日本 語.pdf" };
+        var expectedUrl = "../../assets/" + Uri.EscapeDataString("日本 語.pdf") + suffix;
+        Assert.Equal($"[first]({expectedUrl})\n[second]({expectedUrl})\n",
+            _attachments.RewriteManagedLinksForOutput(_notes, note, markdown, "guides/note/index.html", routes));
+    }
+
+    [Theory]
+    [InlineData("https://example.com/.tatami-assets/a.pdf")]
+    [InlineData("//example.com/.tatami-assets/a.pdf")]
+    [InlineData("#heading")]
+    [InlineData("?download=1")]
+    [InlineData(".tatami-assets/../outside.pdf")]
+    [InlineData(".tatami-assets/%2e%2e/outside.pdf")]
+    public void IgnoresExternalEmptyAndOutsideAssetPaths(string url)
+    {
+        var note = Path.Combine(_notes, "note.md");
+        var markdown = $"[link](<{url}>)\n";
+
+        Assert.False(AttachmentService.TryGetManagedPath(_notes, note, url, out _));
+        Assert.Empty(_attachments.FindReferenced(_notes, note, markdown));
+        Assert.Equal(markdown, _attachments.RewriteManagedLinksForOutput(_notes, note, markdown,
+            "note/index.html", new Dictionary<string, string>()));
+    }
+
+    [Fact]
+    public void PreservesReferencedAttachmentValidationOrderAndSizeBoundary()
+    {
+        var note = Path.Combine(_notes, "note.md");
+        var folder = Path.Combine(_notes, AttachmentService.FolderName);
+        Directory.CreateDirectory(folder);
+        var unsupported = Path.Combine(folder, "missing.exe");
+        var invalid = Assert.Throws<InvalidDataException>(() =>
+            _attachments.FindReferenced(_notes, note, "[bad](.tatami-assets/missing.exe)"));
+        Assert.Equal($"サポートされていない添付形式です: {unsupported}", invalid.Message);
+        var missing = Assert.Throws<FileNotFoundException>(() =>
+            _attachments.FindReferenced(_notes, note, "[missing](.tatami-assets/missing.pdf)"));
+        Assert.Equal(Path.Combine(folder, "missing.pdf"), missing.FileName);
+
+        var asset = Path.Combine(folder, "large.pdf");
+        using (var file = File.Create(asset)) file.SetLength(AttachmentService.MaximumFileSizeBytes);
+        Assert.Single(_attachments.FindReferenced(_notes, note, "[limit](.tatami-assets/large.pdf)"));
+        using (var file = File.OpenWrite(asset)) file.SetLength(AttachmentService.MaximumFileSizeBytes + 1);
+        var oversized = Assert.Throws<InvalidDataException>(() =>
+            _attachments.FindReferenced(_notes, note, "[large](.tatami-assets/large.pdf)"));
+        Assert.Equal($"添付ファイルが100 MBを超えています: {asset}", oversized.Message);
+    }
+
+    [Fact]
+    public void RejectsReferencedSymlinkBeforeCheckingItsFormat()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var folder = Path.Combine(_notes, AttachmentService.FolderName);
+        Directory.CreateDirectory(folder);
+        File.CreateSymbolicLink(Path.Combine(folder, "linked.exe"), _source);
+
+        Assert.Throws<IOException>(() => _attachments.FindReferenced(_notes, Path.Combine(_notes, "note.md"),
+            "[link](.tatami-assets/linked.exe)"));
+    }
+
+    [Theory]
+    [InlineData(".PDF", false)]
+    [InlineData(".PNG", true)]
+    public void ImportsEmptySafeStemWithNormalizedExtension(string extension, bool isImage)
+    {
+        var source = Path.Combine(_root, "   " + extension);
+        File.WriteAllText(source, "content");
+
+        var imported = _attachments.Import(_notes, Path.Combine(_notes, "note.md"), source);
+
+        Assert.Equal("attachment" + extension.ToLowerInvariant(), imported.FileName);
+        Assert.Equal(isImage, imported.IsImage);
+        Assert.StartsWith(isImage ? "![" : "[", imported.Markdown);
+        Assert.Equal("content", File.ReadAllText(imported.Path));
+    }
+
     public void Dispose() => Directory.Delete(_root, true);
 }

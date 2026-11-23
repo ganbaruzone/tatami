@@ -230,3 +230,16 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 - フォーク部分 `src/AvaloniaEdit/` は変更していません。
 - 3プロジェクトの `dotnet format --no-restore --verify-no-changes --severity info` がCIと同じ診断除外設定で成功。
 - `git diff --check`: 成功。
+
+## AttachmentServiceのリファクタリング完了記録（2026-11-23）
+
+添付URLのパス解決を既存の `TryGetManagedPath` に集約し、形式判定にも既存の `IsSupported` を再利用しました。参照リンク定義の走査はネストを1段削減。ファイル名の取得を変数にまとめ、同じMarkdown組み立ての分岐と不要な空文字チェック、URL分割の配列生成を整理しました。公開API、検証順序、例外型・メッセージ、サイズ制限、管理領域とシンボリックリンクの検証は維持しています。
+
+- 回帰テスト14件を追加。日本語・空白を含む相対URL、クエリ／フラグメント、重複参照、外部URLと管理領域外の除外、形式・存在・サイズの検証順序、100 MBの境界、シンボリックリンク拒否、空のファイル名補完と拡張子正規化を確認。
+- 構造変更前に、追加分を含む添付サービスのテスト22件が成功。
+- `dotnet build Tatami.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore`: 全137件成功、失敗0・スキップ0。シンボリックリンクの追加テストはLinuxで実行（Windowsでは権限要件のため実行対象外）。
+- フォーク部分 `src/AvaloniaEdit/` は変更していません。
+- 3プロジェクトの `dotnet format --no-restore --verify-no-changes --severity info` がCIと同じ診断除外設定で成功。
+- `git diff --check`: 成功。

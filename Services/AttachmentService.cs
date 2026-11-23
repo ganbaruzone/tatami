@@ -44,7 +44,8 @@ public sealed class AttachmentService
         var assetRoot = Path.Combine(root, FolderName);
         PathSafety.RejectLinks(assetRoot);
         Directory.CreateDirectory(assetRoot);
-        var fileName = CreateSafeName(Path.GetFileName(sourcePath), extension);
+        var sourceFileName = Path.GetFileName(sourcePath);
+        var fileName = CreateSafeName(sourceFileName, extension);
         var assetPath = Path.Combine(assetRoot, $"{Guid.NewGuid():N}-{fileName}");
         var temporary = Path.Combine(assetRoot, $".tatami-{Guid.NewGuid():N}.tmp");
         try
@@ -58,8 +59,8 @@ public sealed class AttachmentService
         var relative = Path.GetRelativePath(Path.GetDirectoryName(notePath)!, assetPath).Replace(Path.DirectorySeparatorChar, '/');
         var encoded = string.Join('/', relative.Split('/').Select(Uri.EscapeDataString));
         var isImage = ImageExtensions.Contains(extension);
-        var label = Path.GetFileName(sourcePath).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("]", "\\]", StringComparison.Ordinal);
-        var markdown = isImage ? $"![{label}](<{encoded}>)" : $"[{label}](<{encoded}>)";
+        var label = sourceFileName.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("]", "\\]", StringComparison.Ordinal);
+        var markdown = $"{(isImage ? "!" : "")}[{label}](<{encoded}>)";
         return new ImportedAttachment(assetPath, relative, fileName, isImage, markdown);
     }
 
@@ -71,20 +72,10 @@ public sealed class AttachmentService
         var found = new Dictionary<string, NoteAttachment>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         foreach (var link in FindLinks(document))
         {
-            if (string.IsNullOrWhiteSpace(link.Url) || IsExternal(link.Url)) continue;
-            var pathPart = link.Url.Split(['#', '?'], 2)[0];
-            if (pathPart.Length == 0) continue;
-            string path;
-            try
-            {
-                path = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(notePath)!,
-                    Uri.UnescapeDataString(pathPart).Replace('/', Path.DirectorySeparatorChar)));
-            }
-            catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException) { continue; }
-            if (!PathSafety.IsWithin(path, assetRoot)) continue;
+            if (!TryGetManagedPath(root, notePath, link.Url ?? "", out var path)) continue;
             PathSafety.RejectLinks(assetRoot);
             PathSafety.RejectLinks(path);
-            if (!SupportedExtensions.Contains(Path.GetExtension(path)))
+            if (!IsSupported(path))
                 throw new InvalidDataException($"サポートされていない添付形式です: {path}");
             if (!File.Exists(path)) throw new FileNotFoundException($"ノートが参照する添付ファイルがありません: {link.Url}", path);
             if (new FileInfo(path).Length > MaximumFileSizeBytes) throw new InvalidDataException($"添付ファイルが100 MBを超えています: {path}");
@@ -112,21 +103,21 @@ public sealed class AttachmentService
 
         document = Markdown.Parse(markdown, Pipeline);
         edits.Clear();
-        foreach (var group in DescendantBlocks(document).OfType<LinkReferenceDefinitionGroup>())
-            foreach (var definition in group.Links.Values)
-            {
-                if (string.IsNullOrWhiteSpace(definition.Url)
-                    || !TryGetManagedPath(workspace, notePath, definition.Url, out var path)
-                    || !assetRoutes.TryGetValue(path, out var route)) continue;
-                var span = definition.Span;
-                if (span.Start < 0 || span.End >= markdown.Length) continue;
-                var raw = markdown.Substring(span.Start, span.Length);
-                var oldDestination = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
-                var newRoute = RelativeOutputUrl(outputPageRoute, route) + UrlSuffix(definition.Url!);
-                var newDestination = definition.UrlHasPointyBrackets ? $"<{newRoute}>" : newRoute;
-                var relativeStart = raw.IndexOf(oldDestination!, StringComparison.Ordinal);
-                if (relativeStart >= 0) edits.Add((span.Start + relativeStart, oldDestination.Length, newDestination));
-            }
+        foreach (var definition in DescendantBlocks(document).OfType<LinkReferenceDefinitionGroup>()
+            .SelectMany(group => group.Links.Values))
+        {
+            if (string.IsNullOrWhiteSpace(definition.Url)
+                || !TryGetManagedPath(workspace, notePath, definition.Url, out var path)
+                || !assetRoutes.TryGetValue(path, out var route)) continue;
+            var span = definition.Span;
+            if (span.Start < 0 || span.End >= markdown.Length) continue;
+            var raw = markdown.Substring(span.Start, span.Length);
+            var oldDestination = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
+            var newRoute = RelativeOutputUrl(outputPageRoute, route) + UrlSuffix(definition.Url!);
+            var newDestination = definition.UrlHasPointyBrackets ? $"<{newRoute}>" : newRoute;
+            var relativeStart = raw.IndexOf(oldDestination!, StringComparison.Ordinal);
+            if (relativeStart >= 0) edits.Add((span.Start + relativeStart, oldDestination.Length, newDestination));
+        }
         return ApplyEdits(markdown, edits);
     }
 
@@ -136,7 +127,8 @@ public sealed class AttachmentService
     {
         path = string.Empty;
         if (string.IsNullOrWhiteSpace(url) || IsExternal(url)) return false;
-        var pathPart = url.Split(['#', '?'], 2)[0];
+        var suffixIndex = url.IndexOfAny(['#', '?']);
+        var pathPart = suffixIndex >= 0 ? url[..suffixIndex] : url;
         if (pathPart.Length == 0) return false;
         try
         {
@@ -204,7 +196,6 @@ public sealed class AttachmentService
         var stem = Path.GetFileNameWithoutExtension(name).Normalize(NormalizationForm.FormC);
         var safe = new string(stem.Select(character => char.IsLetterOrDigit(character) || character is '-' or '_' or ' ' or '.' ? character : '_').ToArray())
             .Trim(' ', '.');
-        if (safe.Length == 0) safe = "attachment";
         if (safe.Length > 80) safe = safe[..80].TrimEnd(' ', '.');
         if (safe.Length == 0) safe = "attachment";
         return safe + extension.ToLowerInvariant();
