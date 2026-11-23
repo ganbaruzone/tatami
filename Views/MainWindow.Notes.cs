@@ -35,7 +35,7 @@ public partial class MainWindow : Window
         SaveButton.IsEnabled = !_busy && _buffer != null && dirty;
         MetadataPanel.IsEnabled = !_busy && _buffer != null;
         ApplyMetadataButton.IsEnabled = !_busy && _buffer != null && _metadataPending;
-        RenameNoteButton.IsEnabled = TrashNoteButton.IsEnabled = !_busy && _buffer != null;
+        RenameNoteButton.IsEnabled = MoveNoteButton.IsEnabled = TrashNoteButton.IsEnabled = !_busy && _buffer != null;
         Title = _buffer == null ? "Tatami" : $"{(dirty ? "● " : "")}{Path.GetFileName(_buffer.Path)} — Tatami";
         if (_buffer != null) EncodingStatus.Text = $"{_buffer.EncodingName}   Markdown";
         UpdateTabLabels();
@@ -444,6 +444,28 @@ public partial class MainWindow : Window
         Editor.TextArea.Focus();
     }
 
+    private async Task ShowIncomingReferencesAsync()
+    {
+        if (_notesPath == null || _buffer == null)
+        {
+            Log("先にノートを開いてください。", true);
+            return;
+        }
+        ApplyMetadataSettings();
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var openDocuments = _tabs.ToDictionary(tab => Path.GetFullPath(tab.Path), tab => tab.Buffer.Text, pathComparer);
+        var references = await Task.Run(() => _noteLinks.FindIncomingReferences(_notesPath, _buffer.Path, openDocuments));
+        var selected = await new IncomingReferencesWindow(references, _notesPath).ShowDialog<IncomingNoteReference?>(this);
+        if (selected == null) return;
+        await OpenTabAsync(selected.SourcePath);
+        if (selected.Line >= 1 && selected.Line <= Editor.Document.LineCount)
+        {
+            Editor.TextArea.Caret.Offset = Editor.Document.GetLineByNumber(selected.Line).Offset;
+            Editor.ScrollToLine(selected.Line);
+        }
+        Editor.TextArea.Focus();
+    }
+
     private async Task ImportAttachmentAsync()
     {
         if (_notesPath == null || _buffer == null)
@@ -520,6 +542,8 @@ public partial class MainWindow : Window
 
     private async void CheckNoteLinks(object? sender, RoutedEventArgs e) => await RunAsync(CheckNoteLinksAsync);
 
+    private async void ShowIncomingReferences(object? sender, RoutedEventArgs e) => await RunAsync(ShowIncomingReferencesAsync);
+
     private async void ImportAttachment(object? sender, RoutedEventArgs e) => await RunAsync(ImportAttachmentAsync);
 
     private async void RenameNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -541,6 +565,31 @@ public partial class MainWindow : Window
         UpdateBufferStatus();
         await UpdateRecoverySnapshotAsync();
         Log($"名前を変更しました: {_buffer.Path}（公開URLの変更には再ビルドが必要です）");
+    });
+
+    private async void MoveNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (_buffer == null || _notesPath == null) return;
+        var selected = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "ノートの移動先フォルダを選択",
+            AllowMultiple = false
+        });
+        if (selected.Count == 0) return;
+        var directory = selected[0].TryGetLocalPath() ?? throw new IOException("ローカルフォルダを選択してください。");
+        var oldPath = _buffer.Path;
+        var movingTab = _activeTab!;
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var openDocuments = _tabs.ToDictionary(tab => Path.GetFullPath(tab.Path), tab => tab.Buffer.Text, pathComparer);
+        var newPath = Path.Combine(directory, Path.GetFileName(oldPath));
+        var changes = await Task.Run(() => _noteLinks.PrepareRenameUpdates(_notesPath, oldPath, newPath, openDocuments));
+        await Task.Run(() => _buffer.Move(_notesPath, directory));
+        await ApplyRenameReferenceUpdatesAsync(changes, oldPath, movingTab);
+        Breadcrumb.Text = Path.GetRelativePath(_notesPath, _buffer.Path);
+        await ReloadNotesAsync(_buffer.Path);
+        UpdateBufferStatus();
+        await UpdateRecoverySnapshotAsync();
+        Log($"ノートを移動しました: {_buffer.Path}");
     });
 
     private async void TrashNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>

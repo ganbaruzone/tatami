@@ -31,6 +31,21 @@ public sealed class NoteFileServiceTests : IDisposable
         Assert.Equal("original", File.ReadAllText(path));
     }
 
+    [Fact]
+    public void MovesNoteWithinWorkspaceAndRejectsOutsideOrCollision()
+    {
+        var source = _files.Create(_notes, "guide.md");
+        var destinationFolder = Path.Combine(_notes, "folder");
+        Directory.CreateDirectory(destinationFolder);
+        var moved = _files.Move(source, destinationFolder);
+
+        Assert.False(File.Exists(source));
+        Assert.True(File.Exists(moved));
+        Assert.Throws<InvalidDataException>(() => _files.Move(moved, _root));
+        File.WriteAllText(Path.Combine(_notes, "guide.md"), "collision");
+        Assert.Throws<IOException>(() => _files.Move(moved, _notes));
+    }
+
     [Theory]
     [InlineData("../escape")]
     [InlineData("/absolute.md")]

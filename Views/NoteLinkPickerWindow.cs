@@ -139,3 +139,50 @@ internal sealed class BrokenLinksWindow : Window
         Close(_links[_results.SelectedIndex]);
     }
 }
+
+internal sealed class IncomingReferencesWindow : Window
+{
+    private readonly IReadOnlyList<IncomingNoteReference> _references;
+    private readonly ListBox _results;
+
+    public IncomingReferencesWindow(IReadOnlyList<IncomingNoteReference> references, string workspace)
+    {
+        _references = references;
+        Title = "被リンクと言及";
+        Width = 800;
+        Height = 520;
+        MinWidth = 540;
+        MinHeight = 340;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+        _results = new ListBox
+        {
+            Margin = new Thickness(16, 8),
+            ItemsSource = references.Select(reference =>
+                $"{(reference.IsLink ? "↗ リンク" : "言及")}  {System.IO.Path.GetRelativePath(workspace, reference.SourcePath)}:{reference.Line}  {reference.Excerpt}").ToArray(),
+            SelectedIndex = references.Count > 0 ? 0 : -1
+        };
+        _results.DoubleTapped += (_, _) => AcceptSelection();
+        _results.KeyDown += (_, e) => { if (e.Key == Key.Enter) { e.Handled = true; AcceptSelection(); } };
+        var status = new TextBlock
+        {
+            Text = references.Count == 0 ? "被リンクや未リンクの言及はありません。" : $"{references.Count} 件 — 項目を選ぶと参照元を開きます。",
+            Margin = new Thickness(18, 14, 18, 0),
+            Foreground = new SolidColorBrush(Color.Parse(references.Count == 0 ? "#82C6AF" : "#C2C8D2"))
+        };
+        var open = new Button { Content = "参照元を開く", MinWidth = 110, IsEnabled = references.Count > 0, IsDefault = true };
+        open.Click += (_, _) => AcceptSelection();
+        var close = new Button { Content = "閉じる", MinWidth = 90, IsCancel = true };
+        close.Click += (_, _) => Close();
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8, Margin = new Thickness(16, 0, 16, 16), Children = { close, open } };
+        Grid.SetRow(_results, 1);
+        Grid.SetRow(actions, 2);
+        Content = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), Children = { status, _results, actions } };
+    }
+
+    private void AcceptSelection()
+    {
+        if (_references.Count == 0 || _results.SelectedIndex < 0 || _results.SelectedIndex >= _references.Count) return;
+        Close(_references[_results.SelectedIndex]);
+    }
+}

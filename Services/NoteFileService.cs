@@ -97,6 +97,18 @@ public sealed partial class NoteFileService
         return destination;
     }
 
+    public string Move(string source, string directory)
+    {
+        source = CheckNote(source);
+        directory = CheckPath(directory);
+        if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("移動先フォルダがありません。");
+        var destination = CheckPath(Path.Combine(directory, Path.GetFileName(source)));
+        if (string.Equals(source, destination, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return source;
+        EnsureAvailable(destination);
+        File.Move(source, destination, overwrite: false);
+        return destination;
+    }
+
     public TrashedNote MoveToTrash(string source)
     {
         source = CheckNote(source);

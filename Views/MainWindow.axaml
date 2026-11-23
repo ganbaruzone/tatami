@@ -70,17 +70,19 @@
                 </StackPanel>
                 <StackPanel Grid.Row="2" Margin="8,0,8,8" Spacing="4">
                     <TextBlock Name="FolderLabel" Text="フォルダ未選択" Margin="8,0" FontSize="12" FontWeight="SemiBold" Foreground="#C2C8D2" TextTrimming="CharacterEllipsis" />
-                    <Grid Name="NoteActions" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                    <Grid Name="NoteActions" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
                         <Button Name="NewNoteButton" Click="NewNote" Content="＋ 新規" ToolTip.Tip="選択フォルダにMarkdownを作成（⌘N / Ctrl+N）" />
                         <Button Name="RenameNoteButton" Grid.Column="1" Click="RenameNote" Content="名前変更" IsEnabled="False" ToolTip.Tip="編集中のノートの名前を変更" />
-                        <Button Name="TrashNoteButton" Grid.Row="1" Click="TrashNote" Content="ゴミ箱へ" IsEnabled="False" ToolTip.Tip="編集中のノートをTatamiのゴミ箱へ移動" />
-                        <Button Grid.Row="1" Grid.Column="1" Click="RestoreNote" Content="復元" ToolTip.Tip="Tatamiのゴミ箱から復元" />
+                        <Button Name="MoveNoteButton" Grid.Row="1" Click="MoveNote" Content="移動" IsEnabled="False" ToolTip.Tip="編集中のノートを別フォルダへ移動し、ノートリンクを更新" />
+                        <Button Name="TrashNoteButton" Grid.Row="1" Grid.Column="1" Click="TrashNote" Content="ゴミ箱へ" IsEnabled="False" ToolTip.Tip="編集中のノートをTatamiのゴミ箱へ移動" />
+                        <Button Grid.Row="2" Grid.ColumnSpan="2" Click="RestoreNote" Content="ゴミ箱から復元" ToolTip.Tip="Tatamiのゴミ箱から復元" />
                     </Grid>
                 </StackPanel>
-                <Grid Name="LinkTools" Grid.Row="3" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="8,0,8,8">
+                <Grid Name="LinkTools" Grid.Row="3" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" Margin="8,0,8,8">
                     <Button Click="InsertNoteLink" Content="↗ リンク挿入" ToolTip.Tip="ノートまたは見出しへのMarkdownリンクを挿入（⌘K / Ctrl+K）" />
                     <Button Grid.Column="1" Click="CheckNoteLinks" Content="リンク切れ" ToolTip.Tip="ワークスペース内のノートリンクを検査" />
                     <Button Grid.Row="1" Grid.ColumnSpan="2" Click="ImportAttachment" Content="画像・添付ファイルを取り込む" ToolTip.Tip="ワークスペース内へコピーし、相対Markdownリンクを挿入" />
+                    <Button Grid.Row="2" Grid.ColumnSpan="2" Click="ShowIncomingReferences" Content="被リンク・言及" ToolTip.Tip="このノートへのリンクと本文中の未リンク言及を表示" />
                 </Grid>
                 <TreeView Name="FileTree" Grid.Row="4" Background="Transparent" SelectionChanged="FileSelected">
                     <TreeView.ItemTemplate>

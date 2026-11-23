@@ -189,3 +189,14 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 - `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 82件成功、失敗0。
 - `git diff --check`: 成功。
 - アプリ上でのファイル選択ダイアログと実ブラウザでのメディア表示は手動確認していません。
+
+## 被リンク・未リンク言及 完了記録（2026-11-23）
+
+「被リンク・言及」から、アクティブノートへ向くMarkdownリンクと、タイトルまたはファイル名の未リンク言及を行番号・抜粋付きで確認できるようにしました。選択すると参照元ノートを該当行で開きます。移動機能を追加し、ノートの移動・名前変更時にワークスペース内の相対リンクと移動ノート自身の相対リンクを更新します。未保存タブの内容も検索・参照更新へ反映します。
+
+- 被リンクと未リンク言及の検出、リンクラベル／コードの除外、未保存タブ内容、移動時のパス更新と安全な移動をテスト。
+- `dotnet build Tatami.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 86件成功、失敗0。
+- `git diff --check`: 成功。
+- GUI操作の手動確認はしていません。

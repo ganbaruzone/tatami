@@ -65,6 +65,46 @@ public sealed class NoteLinkServiceTests : IDisposable
         Assert.Contains("[reference][ref]", updated);
     }
 
+    [Fact]
+    public void FindsIncomingLinksAndUnlinkedMentionsButIgnoresLinkedLabelsAndCode()
+    {
+        var target = Write("notes/target.md", "---\ntitle: Aurora Guide\n---\n# Guide\n");
+        var source = Write("source.md", "[Aurora Guide](notes/target.md)\nAurora Guide is useful.\n`Aurora Guide` in code.\n```\nAurora Guide\n```\n");
+
+        var found = _links.FindIncomingReferences(_root, target);
+
+        Assert.Equal(2, found.Count);
+        Assert.Contains(found, reference => reference.SourcePath == source && reference.IsLink && reference.Line == 1);
+        Assert.Contains(found, reference => reference.SourcePath == source && !reference.IsLink && reference.Line == 2);
+    }
+
+    [Fact]
+    public void UsesOpenDocumentTextWhenFindingIncomingReferences()
+    {
+        var target = Write("target.md", "# Target\n");
+        var source = Write("source.md", "No reference yet.\n");
+
+        var found = _links.FindIncomingReferences(_root, target,
+            new Dictionary<string, string> { [source] = "Target is mentioned here.\n" });
+
+        Assert.Single(found);
+        Assert.False(found[0].IsLink);
+    }
+
+    [Fact]
+    public void RewritesIncomingAndMovedNoteLinksWhenMovingAcrossFolders()
+    {
+        var target = Write("target.md", "# Target\n[Source](folder/source.md)\n[Source][ref]\n\n[ref]: <folder/source.md>\n");
+        var source = Write("folder/source.md", "[Target](../target.md)\n");
+        var movedTarget = Path.Combine(_root, "folder", "target.md");
+
+        var updates = _links.PrepareRenameUpdates(_root, target, movedTarget);
+
+        Assert.Contains("target.md", updates[source]);
+        Assert.Contains("source.md", updates[target]);
+        Assert.Contains("[ref]: <source.md>", updates[target]);
+    }
+
     private string Write(string relative, string text)
     {
         var path = Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));

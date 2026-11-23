@@ -17,6 +17,7 @@ public sealed record NoteLinkTarget(string Path, string Title, string? HeadingId
 }
 
 public sealed record BrokenNoteLink(string SourcePath, int Line, string Url, string Reason);
+public sealed record IncomingNoteReference(string SourcePath, int Line, string Excerpt, bool IsLink);
 
 /// <summary>Resolves and creates portable Markdown links between workspace notes.</summary>
 public sealed class NoteLinkService
@@ -65,6 +66,76 @@ public sealed class NoteLinkService
                 throw new InvalidDataException($"slugが重複しています: {slug}");
         }
         return routes;
+    }
+
+    public IReadOnlyList<IncomingNoteReference> FindIncomingReferences(string workspace, string targetPath,
+        IReadOnlyDictionary<string, string>? openDocuments = null)
+    {
+        var root = Path.GetFullPath(workspace);
+        var target = Path.GetFullPath(targetPath);
+        var notes = EnumerateNotes(root).ToArray();
+        var known = new HashSet<string>(notes, PathComparer);
+        if (!known.Contains(target)) return [];
+        var targetName = Path.GetFileNameWithoutExtension(target);
+        var targetTitle = GetBodyAndTitle(target, ReadDocument(target, openDocuments)).Title;
+        var terms = new[] { targetTitle, targetName }
+            .Where(term => !string.IsNullOrWhiteSpace(term))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(term => term.Length).ToArray();
+        var results = new List<IncomingNoteReference>();
+        foreach (var sourcePath in notes)
+        {
+            if (string.Equals(sourcePath, target, PathComparison)) continue;
+            var text = ReadDocument(sourcePath, openDocuments);
+            var body = GetBodyAndTitle(sourcePath, text).Body;
+            var document = Markdown.Parse(body, Pipeline);
+            var links = FindLinks(document).ToArray();
+            foreach (var link in links)
+            {
+                if (link.IsImage || string.IsNullOrWhiteSpace(link.Url) || IsExternal(link.Url)) continue;
+                if (TryResolve(root, sourcePath, link.Url, known, out var resolved, out _, out _)
+                    && string.Equals(resolved, target, PathComparison))
+                    results.Add(new IncomingNoteReference(sourcePath, GetLine(body, link.Span.Start),
+                        GetExcerpt(body, link.Span.Start), true));
+            }
+
+            var excluded = links.Select(link => link.Span).Where(span => span.Start >= 0).ToArray();
+            foreach (var block in Descendants<CodeBlock>(document))
+                if (block.Span.Start >= 0) excluded = [.. excluded, block.Span];
+            foreach (var code in Descendants<CodeInline>(document))
+                if (code.Span.Start >= 0) excluded = [.. excluded, code.Span];
+            var mentionSpans = new List<(int Start, int End)>();
+            foreach (var term in terms)
+            {
+                var offset = 0;
+                while ((offset = body.IndexOf(term, offset, StringComparison.OrdinalIgnoreCase)) >= 0)
+                {
+                    var end = offset + term.Length;
+                    if (!excluded.Any(span => offset <= span.End && end - 1 >= span.Start)
+                        && !mentionSpans.Any(span => offset <= span.End && end - 1 >= span.Start))
+                    {
+                        results.Add(new IncomingNoteReference(sourcePath, GetLine(body, offset), GetExcerpt(body, offset), false));
+                        mentionSpans.Add((offset, end - 1));
+                    }
+                    offset = end;
+                }
+            }
+        }
+        return results.OrderBy(reference => reference.SourcePath, PathComparer).ThenBy(reference => reference.Line)
+            .ThenByDescending(reference => reference.IsLink).ToArray();
+    }
+
+    private static string ReadDocument(string path, IReadOnlyDictionary<string, string>? openDocuments) =>
+        openDocuments != null && openDocuments.TryGetValue(Path.GetFullPath(path), out var openText) ? openText : File.ReadAllText(path);
+
+    private static string GetExcerpt(string text, int offset)
+    {
+        var safeOffset = Math.Clamp(offset, 0, text.Length);
+        var start = safeOffset == 0 ? -1 : text.LastIndexOf('\n', safeOffset - 1);
+        start++;
+        var end = text.IndexOf('\n', safeOffset);
+        if (end < 0) end = text.Length;
+        return text[start..end].Trim();
     }
 
     public IReadOnlyList<BrokenNoteLink> CheckLinks(string workspace, IReadOnlyDictionary<string, string>? openDocuments = null)
@@ -150,6 +221,44 @@ public sealed class NoteLinkService
         return markdown;
     }
 
+    private static string UpdateMovedSourceLinks(string markdown, string oldSourcePath, string newSourcePath)
+    {
+        var document = Markdown.Parse(markdown, Pipeline);
+        var edits = new List<(int Start, int Length, string Value)>();
+        foreach (var link in FindLinks(document))
+        {
+            if (link.UrlSpan.IsEmpty || string.IsNullOrWhiteSpace(link.Url) || IsExternal(link.Url)
+                || !TryLocalTarget(oldSourcePath, link.Url, out var resolved, out _)) continue;
+            var rawUrl = markdown.Substring(link.UrlSpan.Start, link.UrlSpan.Length);
+            if (!rawUrl.Equals(link.Url, StringComparison.Ordinal) && !rawUrl.Equals($"<{link.Url}>", StringComparison.Ordinal)) continue;
+            edits.Add((link.UrlSpan.Start, link.UrlSpan.Length, MakeRelativeUrl(newSourcePath, resolved, link.Url)));
+        }
+        foreach (var group in Descendants<LinkReferenceDefinitionGroup>(document))
+        foreach (var definition in group.Links.Values)
+        {
+            if (string.IsNullOrWhiteSpace(definition.Url) || !TryLocalTarget(oldSourcePath, definition.Url, out var resolved, out _)) continue;
+            var block = definition.Span;
+            if (block.Start < 0 || block.End >= markdown.Length) continue;
+            var raw = markdown.Substring(block.Start, block.Length);
+            var rawUrl = definition.UrlHasPointyBrackets ? $"<{definition.Url}>" : definition.Url;
+            var replacement = MakeRelativeUrl(newSourcePath, resolved, definition.Url);
+            if (definition.UrlHasPointyBrackets) replacement = $"<{replacement}>";
+            var relativeStart = raw.IndexOf(rawUrl, StringComparison.Ordinal);
+            if (relativeStart >= 0) edits.Add((block.Start + relativeStart, rawUrl.Length, replacement));
+        }
+        var nonOverlapping = new List<(int Start, int Length, string Value)>();
+        var lastStart = markdown.Length;
+        foreach (var edit in edits.OrderByDescending(item => item.Start))
+        {
+            if (edit.Start < 0 || edit.Start + edit.Length > lastStart || edit.Start + edit.Length > markdown.Length) continue;
+            nonOverlapping.Add(edit);
+            lastStart = edit.Start;
+        }
+        foreach (var edit in nonOverlapping)
+            markdown = markdown.Remove(edit.Start, edit.Length).Insert(edit.Start, edit.Value);
+        return markdown;
+    }
+
     public IReadOnlyDictionary<string, string> PrepareRenameUpdates(string workspace, string oldTargetPath,
         string newTargetPath, IReadOnlyDictionary<string, string>? openDocuments = null)
     {
@@ -159,7 +268,10 @@ public sealed class NoteLinkService
             var text = openDocuments != null && openDocuments.TryGetValue(path, out var openText)
                 ? openText : File.ReadAllText(path);
             var sourceForLinks = string.Equals(path, oldTargetPath, PathComparison) ? newTargetPath : path;
-            var updated = UpdateRenamedTargetLinks(text, sourceForLinks, oldTargetPath, newTargetPath);
+            var updated = string.Equals(path, oldTargetPath, PathComparison)
+                ? UpdateMovedSourceLinks(text, oldTargetPath, newTargetPath)
+                : text;
+            updated = UpdateRenamedTargetLinks(updated, sourceForLinks, oldTargetPath, newTargetPath);
             if (!string.Equals(text, updated, StringComparison.Ordinal)) changes[path] = updated;
         }
         return changes;

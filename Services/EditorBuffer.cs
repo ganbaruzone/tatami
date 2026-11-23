@@ -66,6 +66,8 @@ public sealed class EditorBuffer
 
     public void Rename(string workspace, string name) => Path = new NoteFileService(workspace).Rename(Path, name);
 
+    public void Move(string workspace, string directory) => Path = new NoteFileService(workspace).Move(Path, directory);
+
     public async Task SaveAsync()
     {
         PathSafety.RejectLinks(Path);
