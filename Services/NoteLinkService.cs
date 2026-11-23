@@ -61,8 +61,7 @@ public sealed class NoteLinkService
                 ? PathSafety.FileSlug(Path.GetFileNameWithoutExtension(note.SourcePath))
                 : PathSafety.Slug(note.Metadata.Slug);
             var outputPath = $"{slug}/index.html";
-            if (!outputPaths.Add(outputPath)) throw new InvalidDataException($"slugが重複しています: {slug}");
-            if (!routes.TryAdd(Path.GetFullPath(note.SourcePath), outputPath))
+            if (!outputPaths.Add(outputPath) || !routes.TryAdd(Path.GetFullPath(note.SourcePath), outputPath))
                 throw new InvalidDataException($"slugが重複しています: {slug}");
         }
         return routes;
@@ -145,15 +144,13 @@ public sealed class NoteLinkService
         var known = new HashSet<string>(notes, PathComparer);
         var headingIds = notes.ToDictionary(path => path, path =>
         {
-            var text = openDocuments != null && openDocuments.TryGetValue(path, out var openText)
-                ? openText : File.ReadAllText(path);
+            var text = ReadDocument(path, openDocuments);
             return GetHeadingIds(GetBodyAndTitle(path, text).Body);
         }, PathComparer);
         var results = new List<BrokenNoteLink>();
         foreach (var sourcePath in notes)
         {
-            var text = openDocuments != null && openDocuments.TryGetValue(sourcePath, out var openText)
-                ? openText : File.ReadAllText(sourcePath);
+            var text = ReadDocument(sourcePath, openDocuments);
             var (body, _) = GetBodyAndTitle(sourcePath, text);
             var frontMatterLineOffset = CountLines(text.AsSpan(0, Math.Max(0, text.Length - body.Length)));
             var document = Markdown.Parse(body, Pipeline);
@@ -163,14 +160,7 @@ public sealed class NoteLinkService
                 if (string.IsNullOrWhiteSpace(url) || IsExternal(url)) continue;
                 if (AttachmentService.TryGetManagedPath(root, sourcePath, url, out var attachmentPath))
                 {
-                    string? attachmentError = null;
-                    try
-                    {
-                        PathSafety.RejectLinks(attachmentPath);
-                        if (!AttachmentService.IsSupported(attachmentPath)) attachmentError = "添付できないファイル形式です";
-                        else if (!File.Exists(attachmentPath)) attachmentError = "添付ファイルがありません";
-                    }
-                    catch (IOException) { attachmentError = "添付ファイルのパスにシンボリックリンクがあります"; }
+                    var attachmentError = GetAttachmentError(attachmentPath);
                     if (attachmentError != null)
                         results.Add(new BrokenNoteLink(sourcePath, GetLine(body, link.UrlSpan.Start) + frontMatterLineOffset, url, attachmentError));
                     continue;
@@ -188,12 +178,20 @@ public sealed class NoteLinkService
         return results;
     }
 
+    private static string? GetAttachmentError(string path)
+    {
+        try
+        {
+            PathSafety.RejectLinks(path);
+            if (!AttachmentService.IsSupported(path)) return "添付できないファイル形式です";
+            return File.Exists(path) ? null : "添付ファイルがありません";
+        }
+        catch (IOException) { return "添付ファイルのパスにシンボリックリンクがあります"; }
+    }
+
     public string CreateMarkdownLink(string sourcePath, NoteLinkTarget target, string label)
     {
-        var relative = Path.GetRelativePath(Path.GetDirectoryName(sourcePath)!, target.Path).Replace(Path.DirectorySeparatorChar, '/');
-        if (Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar)
-            relative = relative.Replace(Path.AltDirectorySeparatorChar, '/');
-        var destination = string.Join('/', relative.Split('/').Select(Uri.EscapeDataString));
+        var destination = GetRelativePath(sourcePath, target.Path);
         if (target.HeadingId != null) destination += "#" + Uri.EscapeDataString(target.HeadingId);
         label = label.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("]", "\\]", StringComparison.Ordinal);
         return $"[{label}](<{destination}>)";
@@ -209,8 +207,7 @@ public sealed class NoteLinkService
             if (link.IsImage || link.UrlSpan.IsEmpty || string.IsNullOrWhiteSpace(link.Url)
                 || !TryLocalTarget(sourcePath, link.Url, out var resolved, out _)
                 || !string.Equals(resolved, Path.GetFullPath(oldTargetPath), PathComparison)) continue;
-            var oldUrl = link.Url;
-            var newUrl = MakeRelativeUrl(sourcePath, newTargetPath, oldUrl);
+            var newUrl = MakeRelativeUrl(sourcePath, newTargetPath, link.Url);
             edits.Add((link.UrlSpan.Start, link.UrlSpan.Length, newUrl));
         }
         foreach (var edit in edits.OrderByDescending(item => item.Start))
@@ -265,10 +262,10 @@ public sealed class NoteLinkService
         var changes = new Dictionary<string, string>(PathComparer);
         foreach (var path in EnumerateNotes(workspace))
         {
-            var text = openDocuments != null && openDocuments.TryGetValue(path, out var openText)
-                ? openText : File.ReadAllText(path);
-            var sourceForLinks = string.Equals(path, oldTargetPath, PathComparison) ? newTargetPath : path;
-            var updated = string.Equals(path, oldTargetPath, PathComparison)
+            var text = ReadDocument(path, openDocuments);
+            var isRenamedNote = string.Equals(path, oldTargetPath, PathComparison);
+            var sourceForLinks = isRenamedNote ? newTargetPath : path;
+            var updated = isRenamedNote
                 ? UpdateMovedSourceLinks(text, oldTargetPath, newTargetPath)
                 : text;
             updated = UpdateRenamedTargetLinks(updated, sourceForLinks, oldTargetPath, newTargetPath);
@@ -346,10 +343,8 @@ public sealed class NoteLinkService
     {
         targetPath = string.Empty;
         reason = "リンク先が不正です";
-        var hash = url.IndexOf('#');
-        var query = url.IndexOf('?');
-        var end = new[] { hash, query }.Where(i => i >= 0).DefaultIfEmpty(url.Length).Min();
-        var pathPart = Uri.UnescapeDataString(url[..end]);
+        var suffixIndex = url.IndexOfAny(['#', '?']);
+        var pathPart = Uri.UnescapeDataString(suffixIndex >= 0 ? url[..suffixIndex] : url);
         if (pathPart.StartsWith("//", StringComparison.Ordinal) || pathPart.Contains('\\')) return false;
         try
         {
@@ -426,7 +421,7 @@ public sealed class NoteLinkService
     private static int GetLine(string text, int offset)
     {
         if (offset <= 0) return 1;
-        return 1 + text.Take(Math.Min(offset, text.Length)).Count(character => character == '\n');
+        return 1 + CountLines(text.AsSpan(0, Math.Min(offset, text.Length)));
     }
 
     private static int CountLines(ReadOnlySpan<char> text)

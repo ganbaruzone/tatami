@@ -1,3 +1,4 @@
+using Tatami.Models;
 using Tatami.Services;
 using Xunit;
 
@@ -103,6 +104,97 @@ public sealed class NoteLinkServiceTests : IDisposable
         Assert.Contains("target.md", updates[source]);
         Assert.Contains("source.md", updates[target]);
         Assert.Contains("[ref]: <source.md>", updates[target]);
+    }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("日本 語", "#%E6%97%A5%E6%9C%AC%20%E8%AA%9E")]
+    public void EscapesRelativeDestinationsAndLabels(string? heading, string suffix)
+    {
+        var source = Write("docs/source.md", "");
+        var target = Write("日本 語#%.md", "");
+        const string destination = "../%E6%97%A5%E6%9C%AC%20%E8%AA%9E%23%25.md";
+
+        Assert.Equal(destination, NoteLinkService.GetRelativePath(source, target));
+        Assert.Equal("[a\\\\b\\]](<" + destination + suffix + ">)",
+            _links.CreateMarkdownLink(source, new NoteLinkTarget(target, "Title", heading), "a\\b]"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?mode=read")]
+    [InlineData("#section")]
+    [InlineData("?mode=read#section")]
+    [InlineData("#section?mode=read")]
+    public void RenamePreservesUrlSuffixAndUnrelatedLinks(string suffix)
+    {
+        var source = Write("source.md", "");
+        var oldTarget = Write("old.md", "");
+        var newTarget = Path.Combine(_root, "new name.md");
+        var markdown = $"[rename](old.md{suffix})\n[other](other.md)\n![image](old.md{suffix})\n";
+
+        var updated = _links.UpdateRenamedTargetLinks(markdown, source, oldTarget, newTarget);
+
+        Assert.Equal($"[rename](new%20name.md{suffix})\n[other](other.md)\n![image](old.md{suffix})\n", updated);
+    }
+
+    [Fact]
+    public void ChecksUnsavedLinksAndHeadingsWithFrontMatterLineNumbers()
+    {
+        var target = Write("target.md", "# Old\n");
+        var source = Write("source.md", "[disk](absent.md)\n");
+        var openDocuments = new Dictionary<string, string>
+        {
+            [target] = "# New\n",
+            [source] = "---\ntitle: Source\n---\n[ok](target#new)\n[old](target.md#old)\n[missing](missing.md)\n"
+        };
+
+        var broken = _links.CheckLinks(_root, openDocuments);
+
+        Assert.Collection(broken,
+            link => Assert.Equal(new BrokenNoteLink(source, 5, "target.md#old", "見出し #old がありません"), link),
+            link => Assert.Equal(new BrokenNoteLink(source, 6, "missing.md", "リンク先ノートがありません"), link));
+    }
+
+    [Fact]
+    public void ChecksAttachmentErrorsBeforeSkippingImages()
+    {
+        Write(".tatami-assets/ok.png", "image");
+        var source = Write("source.md", "![ok](.tatami-assets/ok.png)\n![unsupported](.tatami-assets/missing.exe)\n![missing](.tatami-assets/missing.png)\n![ordinary](missing.png)\n");
+
+        var broken = _links.CheckLinks(_root);
+
+        Assert.Collection(broken,
+            link => Assert.Equal(new BrokenNoteLink(source, 2, ".tatami-assets/missing.exe", "添付できないファイル形式です"), link),
+            link => Assert.Equal(new BrokenNoteLink(source, 3, ".tatami-assets/missing.png", "添付ファイルがありません"), link));
+    }
+
+    [Fact]
+    public void RenameUsesUnsavedTextWithoutWritingFiles()
+    {
+        var target = Write("old.md", "# Old\n");
+        var source = Write("source.md", "Disk content\n");
+        var updated = _links.PrepareRenameUpdates(_root, target, Path.Combine(_root, "new.md"),
+            new Dictionary<string, string> { [source] = "[unsaved](old.md)\n" });
+
+        Assert.Single(updated);
+        Assert.Equal("[unsaved](new.md)\n", updated[source]);
+        Assert.Equal("Disk content\n", File.ReadAllText(source));
+        Assert.True(File.Exists(target));
+        Assert.False(File.Exists(Path.Combine(_root, "new.md")));
+    }
+
+    [Theory]
+    [InlineData("other.md", "first", "first")]
+    [InlineData("note.md", "second", "second")]
+    public void RejectsDuplicateOutputRoutesAndSourcePaths(string secondPath, string secondSlug, string errorSlug)
+    {
+        var first = new Note(Path.Combine(_root, "note.md"), new NoteMetadata { Publish = true, Slug = "first" }, "");
+        var second = new Note(Path.Combine(_root, secondPath), new NoteMetadata { Publish = true, Slug = secondSlug }, "");
+
+        var error = Assert.Throws<InvalidDataException>(() => _links.BuildPublishedRoutes([first, second]));
+
+        Assert.Equal($"slugが重複しています: {errorSlug}", error.Message);
     }
 
     private string Write(string relative, string text)

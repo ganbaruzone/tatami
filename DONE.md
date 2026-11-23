@@ -217,3 +217,16 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 ### 最新mainとの統合確認（2026-11-23）
 
 バックリンク機能とCI修正を含む `05b38aa` にCLI変更を載せ直し、アプリ・CLIのビルド（警告0・エラー0）、全111件の自動テスト、3プロジェクトのCI相当の `dotnet format --verify-no-changes` が成功しました。前述の静的解析の失敗は統合前の結果であり、最新mainでは既存のCI修正により解消されています。`src/AvaloniaEdit/` の差分はありません。
+
+## NoteLinkServiceのリファクタリング完了記録（2026-11-23）
+
+相対URL生成と未保存ドキュメントの読み取りを既存メソッドに集約し、名前変更対象の比較結果を再利用しました。同じ例外を投げる分岐を検証順序を保って統合し、添付リンク検査をprivateメソッドへ抽出してネストを削減。URLの区切り位置取得と行数計算では不要な配列・LINQ処理を除きました。公開API、検証順序、エラー文言、ファイル操作の挙動は維持しています。
+
+- 回帰テスト12件を追加。日本語・空白・記号を含むURLとラベル、クエリ／フラグメントの保持、未保存のリンクと見出し、Front Matterを含む行番号、添付形式と欠落の診断順序、名前変更時の未保存内容と元ファイル保持、出力ルート／入力パス重複を確認。
+- 構造変更前に、追加分を含むNoteLinkService関連テスト19件の成功を確認。
+- `dotnet build Tatami.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore`: 全123件成功、失敗0・スキップ0。
+- フォーク部分 `src/AvaloniaEdit/` は変更していません。
+- 3プロジェクトの `dotnet format --no-restore --verify-no-changes --severity info` がCIと同じ診断除外設定で成功。
+- `git diff --check`: 成功。
