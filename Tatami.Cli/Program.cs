@@ -200,7 +200,7 @@ internal static partial class TatamiCli
         return await new WorkspaceSettings().LoadAsync() ?? new SiteConfig("", "");
     }
 
-    private static async Task<int> RunDoctorAsync(string? configPath)
+    private static async Task<int> RunDoctorAsync(string? configPath, bool fix)
     {
         var problems = 0;
         void Check(string label, bool ok, string detail)
@@ -239,6 +239,24 @@ internal static partial class TatamiCli
         {
             var input = ResolveConfiguredPath(config.InputPath);
             var output = ResolveConfiguredPath(config.OutputPath);
+            if (fix)
+            {
+                var project = config.Builder == "external" ? ResolveConfiguredPath(config.External.ProjectPath) : null;
+                var safePathPair = input is not null && output is not null && !IsWithin(input, output);
+                var safeInput = input is not null
+                    && (output is null || safePathPair)
+                    && (project is null || !SamePath(input, project));
+                var safeOutput = output is not null
+                    && input is not null
+                    && safePathPair
+                    && (config.Builder != "external" || project is not null && !IsWithin(project, output));
+                if (safeInput && input is not null && !Directory.Exists(input))
+                    TryCreateDirectory("入力パス", input);
+                if (safeOutput && output is not null && !Directory.Exists(output))
+                    TryCreateDirectory("出力パス", output);
+                input = ResolveConfiguredPath(config.InputPath);
+                output = ResolveConfiguredPath(config.OutputPath);
+            }
             Check("入力パス", input is not null && Directory.Exists(input), input ?? "未設定または存在しません");
             Check("出力パス", output is not null && IsOutputPathSafe(input, output), output ?? "未設定または入力と競合");
             Check("ビルダー設定", config.Builder is "builtin" or "external", config.Builder);
@@ -260,11 +278,44 @@ internal static partial class TatamiCli
                     var outputSeparated = output is not null && !IsWithin(project, output);
                     Check("出力先と外部プロジェクト", outputSeparated,
                         outputSeparated ? "ビルダーの出力先はプロジェクト外です" : "出力先を外部プロジェクトの外側にしてください");
+                    if (fix) PrintDependencyInstallHint(project);
                 }
             }
         }
+        else if (fix)
+        {
+            Console.Error.WriteLine("FIX	設定	入力・出力先を特定できないため自動作成しません。config set または --config を使ってください。");
+        }
 
         return problems == 0 ? 0 : 1;
+    }
+
+    private static void TryCreateDirectory(string label, string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            Console.Error.WriteLine($"FIX\t{label}\t作成しました: {path}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Console.Error.WriteLine($"FIX-ERROR\t{label}\t作成できません: {path}: {ex.Message}");
+        }
+    }
+
+    private static void PrintDependencyInstallHint(string project)
+    {
+        var hint = File.Exists(Path.Combine(project, "pnpm-lock.yaml"))
+            ? $"pnpm --dir \"{project}\" install --frozen-lockfile"
+            : File.Exists(Path.Combine(project, "yarn.lock"))
+                ? $"yarn --cwd \"{project}\" install --frozen-lockfile"
+                : File.Exists(Path.Combine(project, "package-lock.json"))
+                    ? $"npm ci --prefix \"{project}\""
+                    : File.Exists(Path.Combine(project, "package.json"))
+                        ? $"npm install --prefix \"{project}\""
+                        : null;
+        if (hint is not null && !Directory.Exists(Path.Combine(project, "node_modules")))
+            Console.Error.WriteLine($"NEXT\t外部依存関係\t必要な場合はプロジェクトで次を実行してください: {hint}");
     }
 
     private static string? ResolveConfiguredPath(string path) =>
@@ -389,7 +440,7 @@ tatami {Version}
   tatami [--quiet|--verbose] notes restore <id> [--input <dir>]
   tatami config show [--config <file>]
   tatami config set <key> <value> [--config <file>]
-  tatami doctor [--config <file>]
+  tatami doctor [--config <file>] [--fix]
   tatami [--quiet|--verbose] build [--input <dir>] [--output <dir>] [--config <file>] [--json]
   tatami [--quiet|--verbose] build --watch [--input <dir>] [--output <dir>] [--config <file>]
   tatami [--quiet|--verbose] preview [--output <dir>] [--config <file>]
@@ -415,6 +466,7 @@ preview      生成済みHTMLを127.0.0.1で配信します（Ctrl+Cで終了）
 --config     設定JSONのパス（省略時はアプリ設定を使用）。
 --json       build結果をJSONで標準出力へ出します。
 --watch      Markdown変更後に再ビルドします（Ctrl+Cで終了）。
+--fix        doctorで不足ディレクトリを作成し、依存導入コマンドを案内します。
 --quiet      補助メッセージを抑制します。
 --verbose    補足情報を標準エラーへ表示します。
 

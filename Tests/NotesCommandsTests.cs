@@ -1,3 +1,4 @@
+using Tatami.Models;
 using Xunit;
 
 namespace Tatami.Tests;
@@ -11,6 +12,74 @@ public sealed class NotesCommandsTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "tatami-cli-" + Guid.NewGuid().ToString("N"));
 
     public NotesCommandsTests() => Directory.CreateDirectory(_root);
+
+    [Fact]
+    public async Task DoctorFixCreatesOnlyConfiguredSafeDirectories()
+    {
+        var input = Path.Combine(_root, "missing-notes");
+        var output = Path.Combine(input, "site");
+        var config = Path.Combine(_root, "tatami.json");
+        await new SiteConfig(input, output).SaveAsync(config);
+
+        var (code, _, error) = await RunAsync(["doctor", "--fix", "--config", config]);
+
+        Assert.True(code == 0, error);
+        Assert.True(Directory.Exists(input));
+        Assert.True(Directory.Exists(output));
+        Assert.Contains($"FIX\t入力パス\t作成しました: {input}", error);
+        Assert.Contains($"FIX\t出力パス\t作成しました: {output}", error);
+    }
+
+    [Fact]
+    public async Task DoctorFixSkipsDirectoriesWhenOutputIsParentOfInput()
+    {
+        var output = Path.Combine(_root, "not-created");
+        var input = Path.Combine(output, "notes");
+        var config = Path.Combine(_root, "unsafe-config.json");
+        await new SiteConfig(input, output).SaveAsync(config);
+
+        var (code, _, error) = await RunAsync(["doctor", "--fix", "--config", config]);
+
+        Assert.Equal(1, code);
+        Assert.False(Directory.Exists(output));
+        Assert.False(Directory.Exists(input));
+        Assert.Contains("入力パス", error);
+        Assert.Contains("出力パス", error);
+    }
+
+    [Fact]
+    public async Task DoctorFixSuggestsLockedExternalDependenciesWithoutRunningThem()
+    {
+        var input = Path.Combine(_root, "notes");
+        var output = Path.Combine(_root, "site");
+        var project = Path.Combine(_root, "external");
+        Directory.CreateDirectory(project);
+        await File.WriteAllTextAsync(Path.Combine(project, "package.json"), "{}");
+        await File.WriteAllTextAsync(Path.Combine(project, "package-lock.json"), "{}");
+        var config = Path.Combine(_root, "external-tatami.json");
+        var siteConfig = new SiteConfig(input, output)
+        {
+            Builder = "external",
+            External = new ExternalBuildOptions { ProjectPath = project, Executable = "node" }
+        };
+        await siteConfig.SaveAsync(config);
+
+        var (code, _, error) = await RunAsync(["doctor", "--fix", "--config", config]);
+
+        Assert.True(code == 0, error);
+        Assert.Contains($"NEXT\t外部依存関係\t必要な場合はプロジェクトで次を実行してください: npm ci --prefix \"{project}\"", error);
+        Assert.False(Directory.Exists(Path.Combine(project, "node_modules")));
+    }
+
+    [Fact]
+    public async Task FixOptionIsRestrictedToDoctor()
+    {
+        var (code, output, error) = await RunAsync(["notes", "list", "--fix", "--input", _root]);
+
+        Assert.Equal(2, code);
+        Assert.Equal("", output);
+        Assert.Contains("--fix は doctor コマンドでのみ使用できます。", error);
+    }
 
     [Theory]
     [InlineData()]

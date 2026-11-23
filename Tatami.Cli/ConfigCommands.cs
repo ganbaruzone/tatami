@@ -15,7 +15,7 @@ internal static partial class TatamiCli
             return 0;
         }
         if (positionalCount == 1 && positional[0] == "doctor")
-            return await RunDoctorAsync(configPath);
+            return await RunDoctorAsync(configPath, arguments.Fix);
         if (positionalCount == 4 && positional[0] == "config" && positional[1] == "set")
         {
             var config = await ResolveConfigAsync(configPath);

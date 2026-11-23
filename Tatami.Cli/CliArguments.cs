@@ -6,6 +6,7 @@ internal sealed record CliArguments(
     string? Directory,
     bool Json,
     bool Watch,
+    bool Fix,
     bool Quiet,
     bool Verbose)
 {
@@ -18,6 +19,7 @@ internal sealed record CliArguments(
         string? directory = null;
         var json = false;
         var watch = false;
+        var fix = false;
         var quiet = args.Contains("--quiet");
         var verbose = args.Contains("--verbose");
 
@@ -33,6 +35,7 @@ internal sealed record CliArguments(
             if (args[i] is "--quiet" or "--verbose") continue;
             if (args[i] == "--json") { json = true; continue; }
             if (args[i] == "--watch") { watch = true; continue; }
+            if (args[i] == "--fix") { fix = true; continue; }
             if (args[i] is "--input" or "--output" or "--config" or "--directory")
             {
                 var option = args[i];
@@ -67,7 +70,14 @@ internal sealed record CliArguments(
             return false;
         }
 
-        parsed = new CliArguments(positional, input, output, configPath, directory, json, watch, quiet, verbose);
+        if (fix && !(positional.Count == 1 && positional[0] == "doctor"))
+        {
+            parsed = null;
+            error = "--fix は doctor コマンドでのみ使用できます。";
+            return false;
+        }
+
+        parsed = new CliArguments(positional, input, output, configPath, directory, json, watch, fix, quiet, verbose);
         error = null;
         return true;
     }
