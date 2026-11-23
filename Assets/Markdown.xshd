@@ -2,7 +2,7 @@
   <Color name="Heading" foreground="#82C6AF" fontWeight="bold" />
   <Color name="Code" foreground="#D9B780" />
   <Color name="Quote" foreground="#8792A7" fontStyle="italic" />
-  <Color name="Link" foreground="#8DBAF0" />
+  <Color name="Link" foreground="#8DBAF0" underline="true" />
   <Color name="Strong" foreground="#DFD1F1" fontWeight="bold" />
   <RuleSet>
     <Span color="Code" begin="^```" end="^```" multiline="true" />

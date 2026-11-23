@@ -39,6 +39,33 @@ public sealed class NoteLinkServiceTests : IDisposable
     }
 
     [Fact]
+    public void FindsInlineMarkdownLinksAtDocumentOffsetsButIgnoresImagesAndCode()
+    {
+        var source = Write("source.md", "");
+        var markdown = "---\npublish: true\n---\n[guide](guide.md#section)\n\n`[code](guide.md)`\n\n![image](image.png)\n";
+
+        Assert.True(_links.TryGetLinkAtOffset(source, markdown, markdown.IndexOf("[guide]", StringComparison.Ordinal) + 2, out var url));
+        Assert.Equal("guide.md#section", url);
+        Assert.False(_links.TryGetLinkAtOffset(source, markdown, markdown.IndexOf("[code]", StringComparison.Ordinal) + 2, out _));
+        Assert.False(_links.TryGetLinkAtOffset(source, markdown, markdown.IndexOf("![image]", StringComparison.Ordinal) + 3, out _));
+    }
+
+    [Fact]
+    public void ResolvesWorkspaceNoteLinksAndWebUris()
+    {
+        var source = Write("source.md", "");
+        var target = Write("guides/guide.md", "# Section\n");
+
+        Assert.True(_links.TryResolveNotePath(_root, source, "guides/guide.md#section", out var resolved, out var fragment));
+        Assert.Equal(target, resolved);
+        Assert.Equal("section", fragment);
+        Assert.False(_links.TryResolveNotePath(_root, source, "../outside.md", out _, out _));
+        Assert.True(NoteLinkService.TryGetWebUri("https://example.com/path", out var webUri));
+        Assert.Equal("https", webUri.Scheme);
+        Assert.False(NoteLinkService.TryGetWebUri("file:///tmp/note.md", out _));
+    }
+
+    [Fact]
     public void ReportsMissingNoteAndHeadingButIgnoresExternalLinks()
     {
         Write("target.md", "# Existing Section\n");

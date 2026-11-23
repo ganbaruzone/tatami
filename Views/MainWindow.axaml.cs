@@ -61,6 +61,7 @@ public partial class MainWindow : Window
             if (_slashCommandPalette.IsOpen) RefreshSlashCommandPalette();
         };
         Editor.TextArea.TextEntered += OnEditorTextEntered;
+        Editor.AddHandler(InputElement.PointerPressedEvent, OnEditorPointerPressed, RoutingStrategies.Tunnel);
         MetadataPublish.PropertyChanged += (_, e) =>
         {
             if (e.Property.Name == nameof(MetadataPublish.IsChecked)) MetadataSettingChanged(MetadataPublish, EventArgs.Empty);

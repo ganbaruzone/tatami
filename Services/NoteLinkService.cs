@@ -50,6 +50,47 @@ public sealed class NoteLinkService
         return targets;
     }
 
+    public bool TryGetLinkAtOffset(string sourcePath, string markdown, int documentOffset, out string url)
+    {
+        url = string.Empty;
+        var body = GetBodyAndTitle(sourcePath, markdown).Body;
+        var bodyOffset = markdown.Length - body.Length;
+        var bodyPosition = documentOffset - bodyOffset;
+        if (bodyPosition < 0 || bodyPosition >= body.Length) return false;
+
+        var document = Markdown.Parse(body, Pipeline);
+        foreach (var link in FindLinks(document))
+        {
+            if (link.IsImage || string.IsNullOrWhiteSpace(link.Url)
+                || link.Span.Start < 0 || link.Span.End < link.Span.Start
+                || bodyPosition < link.Span.Start || bodyPosition > link.Span.End) continue;
+            url = link.Url;
+            return true;
+        }
+        return false;
+    }
+
+    public bool TryResolveNotePath(string workspace, string sourcePath, string url,
+        out string targetPath, out string fragment)
+    {
+        var root = Path.GetFullPath(workspace);
+        var known = new HashSet<string>(EnumerateNotes(root), PathComparer);
+        return TryResolve(root, sourcePath, url, known, out targetPath, out fragment, out _);
+    }
+
+    public static bool TryGetWebUri(string url, out Uri uri)
+    {
+        if (url.StartsWith("//", StringComparison.Ordinal)) url = "https:" + url;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+            && parsed.Scheme is "http" or "https")
+        {
+            uri = parsed;
+            return true;
+        }
+        uri = null!;
+        return false;
+    }
+
     public IReadOnlyDictionary<string, string> BuildPublishedRoutes(IEnumerable<Note> notes)
     {
         var routes = new Dictionary<string, string>(PathComparer);
