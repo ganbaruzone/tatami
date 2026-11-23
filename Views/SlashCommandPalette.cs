@@ -97,7 +97,6 @@ internal sealed class SlashCommandPalette
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(9, 7),
                 Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
                 Content = new StackPanel
                 {
                     Spacing = 2,
