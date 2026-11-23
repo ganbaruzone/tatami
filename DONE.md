@@ -179,3 +179,13 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 - `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 71件成功、失敗0。
 - `git diff --check`: 成功。
 - GUI上での候補操作・リンク切れ一覧は手動確認していません。
+
+## 添付ファイルの取り込みと公開 完了記録（2026-11-23）
+
+画像・PDF・音声・動画を `.tatami-assets/` へ取り込み、相対Markdownリンクを挿入できるようにしました。HTMLプレビューでは管理対象の添付を限定配信し、内蔵／外部ビルドでは公開ノートの公開本文から参照されたファイルだけを `assets/` へ出力します。非公開ノート、`::: private` 内だけの参照、未参照ファイルは出力せず、欠落した参照はビルドエラーになります。対応形式とサイズ上限は利用ガイドに記載しました。
+
+- 添付の取り込み、管理フォルダ除外、リンク検査、ライブプレビュー、内蔵／外部サイト出力と非公開添付の除外をテスト。
+- `dotnet build Tatami.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 82件成功、失敗0。
+- `git diff --check`: 成功。
+- アプリ上でのファイル選択ダイアログと実ブラウザでのメディア表示は手動確認していません。
