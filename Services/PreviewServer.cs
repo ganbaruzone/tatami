@@ -149,10 +149,22 @@ public sealed class PreviewServer : IAsyncDisposable
         return new Uri(BaseUri, LivePreviewPath.TrimStart('/'));
     }
 
-    public bool CanNavigate(Uri uri) => uri.ToString() == "about:blank" ||
-        (BaseUri != null && uri.Scheme == BaseUri.Scheme && uri.Authority == BaseUri.Authority
-         && (Uri.UnescapeDataString(uri.AbsolutePath) == LivePreviewPath && _liveHtml != null
-             || Resolve(Uri.UnescapeDataString(uri.AbsolutePath)) is { } path && Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase)));
+    public bool CanNavigate(Uri uri)
+    {
+        if (uri.ToString() == "about:blank") return true;
+        if (BaseUri == null || uri.Scheme != BaseUri.Scheme || uri.Authority != BaseUri.Authority) return false;
+        var path = Uri.UnescapeDataString(uri.AbsolutePath);
+        if (path == LivePreviewPath) return _liveHtml != null;
+        if (path.StartsWith(LiveAssetPrefix, StringComparison.Ordinal))
+        {
+            var token = path[LiveAssetPrefix.Length..];
+            return token.Length == 24 && _liveAssets.TryGetValue(token, out var asset)
+                && File.Exists(asset) && AttachmentService.IsSupported(asset);
+        }
+        if (Resolve(path) is not { } resolved) return false;
+        return Path.GetExtension(resolved).Equals(".html", StringComparison.OrdinalIgnoreCase)
+            || AttachmentService.IsSupported(resolved);
+    }
 
     public async ValueTask DisposeAsync()
     {

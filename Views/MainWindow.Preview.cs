@@ -173,7 +173,7 @@ public partial class MainWindow : Window
             if (args.Request == null || !_previewServer.CanNavigate(args.Request))
             {
                 args.Cancel = true;
-                PreviewStatus.Text = "プレビューでは出力先のHTMLだけを開けます。";
+                PreviewStatus.Text = "プレビューでは出力先のHTMLまたは添付ファイルだけを開けます。";
             }
         };
         _webView.NavigationCompleted += (_, args) =>

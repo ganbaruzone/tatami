@@ -130,6 +130,7 @@ public sealed class AttachmentServiceTests : IDisposable
         server.SetLivePreview("<img>", new Dictionary<string, string> { [token] = imported.Path }, _notes);
         using var client = new HttpClient();
 
+        Assert.True(server.CanNavigate(new Uri(server.BaseUri!, "__tatami_live_assets/" + token)));
         var response = await client.GetAsync(new Uri(server.BaseUri!, "__tatami_live_assets/" + token));
         var missing = await client.GetAsync(new Uri(server.BaseUri!, "__tatami_live_assets/unknown"));
 
