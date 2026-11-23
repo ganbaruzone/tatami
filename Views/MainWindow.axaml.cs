@@ -146,6 +146,39 @@ public partial class MainWindow : Window
     private async void SearchAllNotes(object? sender, RoutedEventArgs e) =>
         await RunAsync(() => FindNotesAsync(searchContents: true));
 
+    private async void SavedNoteViews(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (_notesPath == null)
+        {
+            Log("先にメモのディレクトリを開いてください。", true);
+            return;
+        }
+
+        var entries = await Task.Run(() => WorkspaceEntry.Read(_notesPath));
+        var paths = new List<string>();
+        void AddMarkdownFiles(IEnumerable<WorkspaceEntry> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.IsDirectory) AddMarkdownFiles(node.Children);
+                else if (string.Equals(Path.GetExtension(node.FullPath), ".md", StringComparison.OrdinalIgnoreCase)) paths.Add(node.FullPath);
+            }
+        }
+        AddMarkdownFiles(entries);
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        foreach (var tab in _tabs)
+            if (!paths.Contains(tab.Path, pathComparer)) paths.Add(tab.Path);
+        var openDocuments = _tabs.ToDictionary(tab => tab.Path, tab => tab.Buffer.Text, pathComparer);
+        var repository = new NoteRepository();
+        var notes = await Task.Run(() => paths.Select(path => repository.Parse(path,
+            openDocuments.TryGetValue(path, out var text) ? text : File.ReadAllText(path))).ToArray());
+        var views = new SavedNoteViewsWindow(_notesPath, notes);
+        var selectedPath = await views.ShowForAsync(this);
+        if (selectedPath == null) return;
+        await OpenTabAsync(selectedPath);
+        Editor.TextArea.Focus();
+    });
+
     private void Log(string message, bool error = false)
     {
         if (error) RecordDiagnostics(message);

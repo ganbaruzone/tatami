@@ -19,6 +19,19 @@
 | エラーから該当ファイル・行へ移動 | 完了 |
 | CLI初期リリースの必須コマンド・共通仕様 | 完了 |
 | 公開ノートの記事一覧・タグ別・年別アーカイブ | 完了 |
+| 条件を保存できるノート一覧と一覧・表・カード表示 | 完了 |
+
+## 条件を保存できるノート一覧（2026-11-23）
+
+GUIに「ノート一覧…」を追加しました。タグ、公開状態、日付範囲、フォルダで絞り込み、日付・タイトル・パスで並べ替えできます。条件は名前を付けてワークスペース単位で保存し、一覧・表・カードの各表示で確認してノートを開けます。Markdownファイルは読み取りのみです。
+
+- フィルターの組み合わせ、昇順／降順、保存ビューの同名上書きを回帰テストで確認。
+- `dotnet build Tatami.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet build Tatami.Cli/Tatami.Cli.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 141件成功、失敗0・スキップ0。
+- CIと同じ診断除外を使った3プロジェクトの `dotnet format --verify-no-changes --severity info` が成功。
+- `git diff --check`: 成功。
+- GUIの手動操作は未実施。
 
 ## CLI 完了項目
 
