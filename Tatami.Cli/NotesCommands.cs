@@ -34,7 +34,18 @@ internal static partial class TatamiCli
         if (positionalCount == 4 && positional[0] == "notes" && positional[1] == "rename")
         {
             var source = ResolveNotePath(root, positional[2]);
+            var newPath = Path.Combine(Path.GetDirectoryName(source)!, NoteFileService.NormalizeName(positional[3]));
+            var links = new NoteLinkService();
+            var changes = links.PrepareRenameUpdates(root, source, newPath);
             var renamed = new NoteFileService(root).Rename(source, positional[3]);
+            foreach (var (path, updatedText) in changes)
+            {
+                var target = string.Equals(path, source, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+                    ? renamed : path;
+                var buffer = await EditorBuffer.OpenAsync(target);
+                buffer.Text = updatedText;
+                await buffer.SaveAsync();
+            }
             Console.WriteLine(Path.GetRelativePath(root, renamed));
             return 0;
         }

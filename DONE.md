@@ -168,3 +168,14 @@ AvaloniaEdit 12.0.0では変換中テキスト（preedit）が破棄されてい
 - `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo -clp:ErrorsOnly`: 66件成功、失敗0。
 - macOS日本語IMEの実入力（ライブ変換、候補選択、確定、キャンセル）およびWindows/Linuxの実機確認は、この実行では行っていません。
 - 上流AvaloniaEditに未マージの修正を含むため、依存元ソースをローカルで保持しています。由来とライセンスは `THIRD-PARTY-NOTICES.md` に記録しました。
+
+## ノート間Markdownリンク完了記録（2026-11-23）
+
+左側の「リンク挿入」／⌘K・Ctrl+Kからノート・見出し候補を選び、相対パスと標準Markdownのリンクを挿入できます。選択文字列をリンクラベルに利用し、新しいリンク先ノートも作成できます。「リンク切れ」では存在しないノート・見出しを行番号付きで一覧表示し、参照元を開けます。GUIとCLIのノート名前変更で、ワークスペース内のインラインリンクと参照リンク定義を更新します。サイトビルドとライブプレビューでは公開ノートへの `.md` 相対リンクを生成済みHTMLページのURLへ変換します。Markdown本文は標準リンク形式のままです。
+
+- ノート候補、見出しアンカー、相対リンク生成、ファイル／見出しのリンク切れ、名前変更時のインライン／参照リンク更新をテスト。
+- ビルド済みサイトで公開ノートへのリンクURL変換をテスト。
+- `dotnet build Tatami.csproj --no-restore --nologo`: 成功（警告0・エラー0）。
+- `dotnet test Tests/Tatami.Tests.csproj --no-restore --nologo`: 71件成功、失敗0。
+- `git diff --check`: 成功。
+- GUI上での候補操作・リンク切れ一覧は手動確認していません。

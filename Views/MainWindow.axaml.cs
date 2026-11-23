@@ -86,6 +86,12 @@ public partial class MainWindow : Window
             await RunAsync(SaveCurrentAsync);
             return;
         }
+        if (e.Key == Key.K && e.KeyModifiers == modifier)
+        {
+            e.Handled = true;
+            await RunAsync(InsertNoteLinkAsync);
+            return;
+        }
         if (e.Key == Key.P && e.KeyModifiers == modifier)
         {
             e.Handled = true;
@@ -157,7 +163,7 @@ public partial class MainWindow : Window
         // Resolve IME preedit before saving, changing tabs, or moving focus into another workflow.
         Editor.TextArea.CommitPreedit();
         _busy = true;
-        Toolbar.IsEnabled = FileTree.IsEnabled = RefreshButton.IsEnabled = OutputFolderButton.IsEnabled = BuilderSettingsButton.IsEnabled = NoteActions.IsEnabled = false;
+        Toolbar.IsEnabled = FileTree.IsEnabled = RefreshButton.IsEnabled = OutputFolderButton.IsEnabled = BuilderSettingsButton.IsEnabled = NoteActions.IsEnabled = LinkTools.IsEnabled = false;
         Editor.IsReadOnly = true;
         try { await action(); }
         catch (OperationCanceledException) { Log("ビルドを中止しました。前回の出力を保持しています。"); }
@@ -165,7 +171,7 @@ public partial class MainWindow : Window
         finally
         {
             _busy = false;
-            Toolbar.IsEnabled = FileTree.IsEnabled = RefreshButton.IsEnabled = OutputFolderButton.IsEnabled = BuilderSettingsButton.IsEnabled = NoteActions.IsEnabled = true;
+            Toolbar.IsEnabled = FileTree.IsEnabled = RefreshButton.IsEnabled = OutputFolderButton.IsEnabled = BuilderSettingsButton.IsEnabled = NoteActions.IsEnabled = LinkTools.IsEnabled = true;
             Editor.IsReadOnly = false;
             UpdateBufferStatus();
             UpdateExternalDiffButton();

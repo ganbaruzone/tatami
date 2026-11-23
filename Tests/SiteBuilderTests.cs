@@ -64,6 +64,19 @@ public sealed class SiteBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task RewritesMarkdownNoteLinksToPublishedHtmlRoutes()
+    {
+        Note("current.md", "---\npublish: true\n---\n[Guide](guides/start%20here.md#first-heading)\n");
+        Note("guides/start here.md", "---\npublish: true\nslug: guide\n---\n# First Heading\n");
+        Note("private.md", "---\npublish: false\n---\nprivate\n");
+        await _builder.BuildAsync(_input, _output);
+
+        var html = Html("current");
+
+        Assert.Contains("href=\"../guide/index.html#first-heading\"", html);
+    }
+
+    [Fact]
     public async Task DuplicateSlugLeavesPublishedSiteUnchanged()
     {
         Note("one.md", "---\npublish: true\nslug: same\n---\nOriginal");

@@ -1,0 +1,77 @@
+using Tatami.Services;
+using Xunit;
+
+namespace Tatami.Tests;
+
+public sealed class NoteLinkServiceTests : IDisposable
+{
+    private readonly string _root;
+    private readonly NoteLinkService _links = new();
+
+    public NoteLinkServiceTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "tatami-link-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_root);
+    }
+
+    [Fact]
+    public void FindsNotesAndHeadingTargetsUsingRenderedAnchorIds()
+    {
+        var path = Write("guides/start.md", "---\ntitle: Start Here\n---\n# First Heading\n## 日本語の見出し\n");
+
+        var targets = _links.FindTargets(_root);
+
+        Assert.Contains(targets, target => target.Path == path && target.Title == "Start Here" && target.HeadingId == null);
+        Assert.Contains(targets, target => target.Path == path && target.HeadingId == "first-heading");
+        Assert.Contains(targets, target => target.Path == path && target.HeadingTitle == "日本語の見出し");
+    }
+
+    [Fact]
+    public void CreatesPortableRelativeLinksIncludingHeadingFragments()
+    {
+        var source = Write("docs/index.md", "");
+        var target = Write("docs/guide/Start Here.md", "# Section\n");
+
+        var link = _links.CreateMarkdownLink(source, new NoteLinkTarget(target, "Start Here", "section", "Section"), "Read this");
+
+        Assert.Equal("[Read this](<guide/Start%20Here.md#section>)", link);
+    }
+
+    [Fact]
+    public void ReportsMissingNoteAndHeadingButIgnoresExternalLinks()
+    {
+        Write("target.md", "# Existing Section\n");
+        var source = Write("source.md", "# Source\n[missing](missing.md)\n[bad heading](target.md#absent)\n[ok](target.md#existing-section)\n[web](https://example.com)\n");
+
+        var broken = _links.CheckLinks(_root);
+
+        Assert.Equal(2, broken.Count);
+        Assert.Contains(broken, link => link.SourcePath == source && link.Url == "missing.md");
+        Assert.Contains(broken, link => link.SourcePath == source && link.Url == "target.md#absent");
+    }
+
+    [Fact]
+    public void UpdatesInlineAndReferenceLinksAfterRename()
+    {
+        var source = Write("folder/source.md", "");
+        var oldTarget = Write("folder/old.md", "# Old\n");
+        var newTarget = Path.Combine(Path.GetDirectoryName(oldTarget)!, "new.md");
+        var markdown = "[inline](old.md#old)\n\n[ref]: <old.md#old> \"title\"\n\n[reference][ref]\n";
+
+        var updated = _links.UpdateRenamedTargetLinks(markdown, source, oldTarget, newTarget);
+
+        Assert.Contains("[inline](new.md#old)", updated);
+        Assert.Contains("[ref]: new.md#old \"title\"", updated);
+        Assert.Contains("[reference][ref]", updated);
+    }
+
+    private string Write(string relative, string text)
+    {
+        var path = Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text);
+        return path;
+    }
+
+    public void Dispose() => Directory.Delete(_root, true);
+}

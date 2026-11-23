@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,11 +32,13 @@ public sealed class SiteBuilder(string? templateDirectory = null)
         if (PathSafety.IsWithin(input, output)) throw new InvalidDataException("出力先に入力元と同じフォルダ、またはその親は指定できません。");
         PathSafety.RejectLinks(input);
         PathSafety.RejectLinks(output);
-        var renderer = new TemplateRenderer(Path.Combine(_templates, "default.html"));
+        var notes = new NoteRepository().ReadAll(input, output).ToArray();
+        var routes = new NoteLinkService().BuildPublishedRoutes(notes);
+        var renderer = new TemplateRenderer(Path.Combine(_templates, "default.html"), routes);
         var generated = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var published = 0;
         var unpublished = 0;
-        foreach (var note in new NoteRepository().ReadAll(input, output))
+        foreach (var note in notes)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!PublishFilter.IsPublic(note)) { unpublished++; continue; }

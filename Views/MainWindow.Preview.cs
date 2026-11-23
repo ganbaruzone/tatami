@@ -96,7 +96,13 @@ public partial class MainWindow : Window
             if (_metadataPending)
                 text = NoteMetadataEditor.Apply(text, MetadataTitle.Text, MetadataPublish.IsChecked == true, MetadataSlug.Text);
             var note = new NoteRepository().Parse(_buffer.Path, text);
-            var renderer = new TemplateRenderer(Path.Combine(AppContext.BaseDirectory, "Templates", "default.html"));
+            var notes = new NoteRepository().ReadAll(_notesPath!, _outputPath).ToList();
+            var existingIndex = notes.FindIndex(item => string.Equals(item.SourcePath, note.SourcePath,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+            if (existingIndex >= 0) notes[existingIndex] = note;
+            else notes.Add(note);
+            var routes = _noteLinks.BuildPublishedRoutes(notes);
+            var renderer = new TemplateRenderer(Path.Combine(AppContext.BaseDirectory, "Templates", "default.html"), routes, rootRelativeNoteLinks: true);
             _previewServer.SetLivePreview(renderer.Render(note));
             if (_livePreviewActive)
             {

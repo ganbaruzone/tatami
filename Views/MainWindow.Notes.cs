@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly List<OpenNoteTab> _tabs = [];
     private readonly Dictionary<OpenNoteTab, TextBlock> _tabLabels = [];
     private readonly Dictionary<OpenNoteTab, Border> _tabBorders = [];
+    private readonly NoteLinkService _noteLinks = new();
     private OpenNoteTab? _activeTab;
     private EditorBuffer? _buffer;
     private WorkspaceEntry? _selected;
@@ -385,6 +386,90 @@ public partial class MainWindow : Window
         finally { _changingSelection = false; }
     }
 
+    private async Task InsertNoteLinkAsync()
+    {
+        if (_notesPath == null || _buffer == null)
+        {
+            Log("先にリンクを挿入するノートを開いてください。", true);
+            return;
+        }
+
+        var targets = await Task.Run(() => _noteLinks.FindTargets(_notesPath));
+        var pick = await new NoteLinkPickerWindow(targets).ShowDialog<NoteLinkPick?>(this);
+        if (pick == null) return;
+
+        NoteLinkTarget target;
+        if (pick.CreateNew)
+        {
+            var directory = Path.GetDirectoryName(_buffer.Path)!;
+            var name = await NoteDialogs.Name("リンク先の新しいノート", "無題.md", directory).ShowDialog<string?>(this);
+            if (name == null) return;
+            var path = await Task.Run(() => new NoteFileService(_notesPath).Create(directory, name));
+            target = new NoteLinkTarget(path, Path.GetFileNameWithoutExtension(path));
+            await ReloadNotesAsync(_activeTab?.Path);
+        }
+        else if (pick.Target is { } chosen) target = chosen;
+        else return;
+
+        var selection = Editor.TextArea.Selection.SurroundingSegment;
+        var label = selection.Length > 0
+            ? Editor.Document.GetText(selection)
+            : target.HeadingTitle ?? target.Title;
+        var markdownLink = _noteLinks.CreateMarkdownLink(_buffer.Path, target, label);
+        Editor.Document.Replace(selection.Offset, selection.Length, markdownLink);
+        Editor.TextArea.Caret.Offset = selection.Offset + markdownLink.Length;
+        Editor.TextArea.Focus();
+        Log($"Markdownリンクを挿入しました: {target.Display}");
+    }
+
+    private async Task CheckNoteLinksAsync()
+    {
+        if (_notesPath == null)
+        {
+            Log("先にメモのディレクトリを開いてください。", true);
+            return;
+        }
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var openDocuments = _tabs.ToDictionary(tab => Path.GetFullPath(tab.Path), tab => tab.Buffer.Text, pathComparer);
+        var broken = await Task.Run(() => _noteLinks.CheckLinks(_notesPath, openDocuments));
+        var selected = await new BrokenLinksWindow(broken, _notesPath).ShowDialog<BrokenNoteLink?>(this);
+        if (selected == null) return;
+        await OpenTabAsync(selected.SourcePath);
+        if (selected.Line >= 1 && selected.Line <= Editor.Document.LineCount)
+        {
+            Editor.TextArea.Caret.Offset = Editor.Document.GetLineByNumber(selected.Line).Offset;
+            Editor.ScrollToLine(selected.Line);
+        }
+        Editor.TextArea.Focus();
+    }
+
+    private async Task ApplyRenameReferenceUpdatesAsync(
+        IReadOnlyDictionary<string, string> changes, string oldPath, OpenNoteTab renamedTab)
+    {
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        foreach (var (path, updatedText) in changes)
+        {
+            var tab = pathComparer.Equals(path, oldPath)
+                ? renamedTab
+                : _tabs.FirstOrDefault(item => pathComparer.Equals(item.Path, path));
+            if (tab != null)
+            {
+                if (tab == _activeTab)
+                    Editor.Document.Replace(0, Editor.Document.TextLength, updatedText);
+                else
+                {
+                    tab.Document.Replace(0, tab.Document.TextLength, updatedText);
+                    tab.Buffer.Text = tab.Document.Text;
+                }
+                continue;
+            }
+
+            var buffer = await EditorBuffer.OpenAsync(path);
+            buffer.Text = updatedText;
+            await buffer.SaveAsync();
+        }
+    }
+
     private async Task CreateNoteAsync()
     {
         if (_notesPath == null && !await SelectNotesFolderAsync()) return;
@@ -401,12 +486,23 @@ public partial class MainWindow : Window
 
     private async void NewNote(object? sender, RoutedEventArgs e) => await RunAsync(CreateNoteAsync);
 
+    private async void InsertNoteLink(object? sender, RoutedEventArgs e) => await RunAsync(InsertNoteLinkAsync);
+
+    private async void CheckNoteLinks(object? sender, RoutedEventArgs e) => await RunAsync(CheckNoteLinksAsync);
+
     private async void RenameNote(object? sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         if (_buffer == null || _notesPath == null) return;
         var name = await NoteDialogs.Name("ノートの名前変更", Path.GetFileName(_buffer.Path), Path.GetDirectoryName(_buffer.Path)!).ShowDialog<string?>(this);
         if (name == null) return;
+        var oldPath = _buffer.Path;
+        var renamedTab = _activeTab!;
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var openDocuments = _tabs.ToDictionary(tab => Path.GetFullPath(tab.Path), tab => tab.Buffer.Text, pathComparer);
+        var newPath = Path.Combine(Path.GetDirectoryName(oldPath)!, NoteFileService.NormalizeName(name));
+        var changes = await Task.Run(() => _noteLinks.PrepareRenameUpdates(_notesPath, oldPath, newPath, openDocuments));
         await Task.Run(() => _buffer.Rename(_notesPath, name));
+        await ApplyRenameReferenceUpdatesAsync(changes, oldPath, renamedTab);
         // Do not reload the document: unsaved changes, caret, and undo history belong to this buffer.
         Breadcrumb.Text = Path.GetRelativePath(_notesPath, _buffer.Path);
         await ReloadNotesAsync(_buffer.Path);
